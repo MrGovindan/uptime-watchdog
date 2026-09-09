@@ -9,6 +9,7 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "typecheck": "tsc",
+    "test": "vitest run",
     "prepare": "husky"
   },
   "dependencies": {
