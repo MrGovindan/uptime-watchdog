@@ -1,4 +1,4 @@
-import { Cron, Effect, Result, Schema, SchemaGetter, SchemaIssue } from 'effect'
+import { Cron as EffectCron, Effect, Result, Schema, SchemaGetter, SchemaIssue } from 'effect'
 import { Model } from 'effect/unstable/schema'
 import { type UptimeObservation, UptimeRequest } from './Uptime'
 
@@ -8,18 +8,17 @@ export type Uuid = typeof Uuid.Type
 export const MonitorId = Schema.brand('MonitorId')(Uuid)
 export type MonitorId = typeof MonitorId.Type
 
-const CronExpressionString = Schema.String.pipe(
-  Schema.decodeTo(Schema.String, {
+const Cron = Schema.declare(EffectCron.isCron).pipe(
+  Schema.encodeTo(Schema.String, {
     decode: SchemaGetter.transformEffect((expression: string) =>
       Effect.fromResult(
-        Cron.parse(expression).pipe(
-          Result.map(() => expression),
+        EffectCron.parse(expression).pipe(
           Result.mapError((error) => new SchemaIssue.InvalidValue({ message: error.message })),
         ),
       ),
     ),
 
-    encode: SchemaGetter.passthrough(),
+    encode: SchemaGetter.transform(EffectCron.format),
   }),
 )
 
@@ -37,7 +36,7 @@ export class Monitor extends Model.Class<Monitor>('Monitor')({
     jsonCreate: UptimeRequest,
     jsonUpdate: UptimeRequest,
   }),
-  cronSchedule: CronExpressionString,
+  cronSchedule: Cron,
   createdAt: Model.Field({
     select: Schema.String,
     insert: CreatedAt,

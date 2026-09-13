@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@effect/vitest'
-import { Effect, Schema } from 'effect'
+import { Cron, Effect, Schema } from 'effect'
 
 import { Monitor, MonitorDefinition, MonitorId } from './Monitor'
 
@@ -14,6 +14,7 @@ const decodeMonitorId = Schema.decodeUnknownEffect(MonitorId)
 const decodeDefinition = Schema.decodeUnknownEffect(MonitorDefinition)
 const decodeMonitor = Schema.decodeUnknownEffect(Monitor.json)
 const encodeMonitor = Schema.encodeUnknownEffect(Monitor.json)
+const encodeDefinition = Schema.encodeUnknownEffect(MonitorDefinition)
 const encodeInsert = Schema.encodeUnknownEffect(Monitor.insert)
 
 const makeDefinition = () => decodeDefinition(definitionJson)
@@ -49,7 +50,18 @@ describe('MonitorDefinition', () => {
       const definition = yield* makeDefinition()
 
       expect(definition.request.headers).toEqual({})
-      expect(definition.cronSchedule).toBe('*/5 * * * *')
+      expect(Cron.isCron(definition.cronSchedule)).toBe(true)
+      expect(Cron.format(definition.cronSchedule)).toBe('0-55/5 * * * *')
+    }),
+  )
+
+  it.effect('encodes the parsed schedule back to its expression', () =>
+    Effect.gen(function* () {
+      const definition = yield* makeDefinition()
+
+      const encoded = yield* encodeDefinition(definition)
+
+      expect(encoded.cronSchedule).toBe('0-55/5 * * * *')
     }),
   )
 

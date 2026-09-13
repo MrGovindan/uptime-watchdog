@@ -1,35 +1,41 @@
 import { BunHttpServer } from '@effect/platform-bun'
 import { Api, MonitorDefinition } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
-import { Effect, Layer } from 'effect'
+import { Cron, Effect, Layer, Schema } from 'effect'
 import { HttpRouter } from 'effect/unstable/http'
 import { HttpApiTest } from 'effect/unstable/httpapi'
 import * as Database from './Database'
 import * as MonitorApi from './MonitorApi'
+import * as MonitorEvents from './MonitorEvents'
 import { layer as monitorRepositoryLayer } from './MonitorRepository'
 
 const dependencies = Layer.provideMerge(BunHttpServer.layerHttpServices)
 
-const groupLayer = () =>
-  MonitorApi.MonitorGroupLive.pipe(
-    Layer.provide(monitorRepositoryLayer),
+const repositoryLayer = () =>
+  monitorRepositoryLayer.pipe(
+    Layer.provide(MonitorEvents.layer),
     Layer.provide(Database.layer(':memory:')),
-    dependencies,
   )
 
-const applicationLayer = () =>
-  MonitorApi.layer.pipe(
-    Layer.provide(monitorRepositoryLayer),
-    Layer.provide(Database.layer(':memory:')),
-    dependencies,
-  )
+const groupLayer = () =>
+  MonitorApi.MonitorGroupLive.pipe(Layer.provide(repositoryLayer()), dependencies)
+
+const applicationLayer = () => MonitorApi.layer.pipe(Layer.provide(repositoryLayer()), dependencies)
 
 const openClient = HttpApiTest.groups(Api, ['monitor'])
 
-const definition = MonitorDefinition.make({
-  request: { hostname: 'example.test', port: 8080, protocol: 'https', method: 'GET', headers: {} },
-  cronSchedule: '*/5 * * * *',
-})
+const definition = Effect.runSync(
+  Schema.decodeUnknownEffect(MonitorDefinition)({
+    request: {
+      hostname: 'example.test',
+      port: 8080,
+      protocol: 'https',
+      method: 'GET',
+      headers: {},
+    },
+    cronSchedule: '*/5 * * * *',
+  }),
+)
 
 describe('monitor registration', () => {
   it.effect('registers a monitor with a generated id and defaulted headers', () =>
@@ -41,6 +47,8 @@ describe('monitor registration', () => {
       expect(created.id).toMatch(/^[0-9a-f-]{36}$/)
       expect(created.request).toMatchObject(definition.request)
       expect(created.request.headers).toEqual({})
+      expect(Cron.isCron(created.cronSchedule)).toBe(true)
+      expect(Cron.format(created.cronSchedule)).toBe('0-55/5 * * * *')
     }).pipe(Effect.provide(groupLayer())),
   )
 

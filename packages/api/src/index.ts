@@ -1,62 +1,47 @@
 import { BunHttpClient, BunHttpServer, BunRuntime } from '@effect/platform-bun'
-import { Monitor } from '@uptime-watchdog/common'
-import { Context, Cron, Effect, Layer, pipe, Result, Schedule, Stream } from 'effect'
+import { Effect, Layer, Stream } from 'effect'
 import { HttpRouter, HttpStaticServer } from 'effect/unstable/http'
 import * as CheckUptime from './CheckUptime'
 import * as AppConfig from './Config'
 import * as Database from './Database'
 import * as MonitorApi from './MonitorApi'
+import * as MonitorEvents from './MonitorEvents'
 import * as MonitorRepository from './MonitorRepository'
-
-class MonitorSource extends Context.Service<MonitorSource, ReadonlyArray<Monitor>>()(
-  'MonitorSource',
-) {
-  static layerStatic = Layer.succeed(MonitorSource, [])
-}
-
-const uptimeChecker = Effect.gen(function* () {
-  const monitors = yield* MonitorSource
-  const checkUptime = yield* CheckUptime.CheckUptime
-
-  const stream = Stream.mergeAll({ concurrency: 'unbounded' })(
-    monitors.map((monitor) => createMonitorStream(monitor, checkUptime)),
-  )
-
-  yield* Stream.runForEach(stream, Effect.log)
-}).pipe(
-  Effect.provide(CheckUptime.layer),
-  Effect.provide(MonitorSource.layerStatic),
-  Effect.provide(BunHttpClient.layer),
-)
-
-const createMonitorStream = (monitor: Monitor, checkUptime: CheckUptime.Interface) =>
-  pipe(
-    Stream.fromEffectSchedule(
-      checkUptime(monitor.request),
-      Schedule.cron(Result.getOrThrow(Cron.parse(monitor.cronSchedule))),
-    ),
-    Stream.map((observation) => ({ monitorId: monitor.id, observation })),
-  )
+import * as MonitorStreams from './MonitorStreams'
 
 const application = Layer.unwrap(
   Effect.gen(function* () {
     const { port, staticRoot, databasePath } = yield* AppConfig.server
 
     const database = Database.layer(databasePath)
-
-    const api = MonitorApi.layer.pipe(
-      Layer.provide(MonitorRepository.layer),
-      Layer.provide(database),
+    const events = MonitorEvents.layer
+    const repository = MonitorRepository.layer.pipe(Layer.provide(events), Layer.provide(database))
+    const streams = MonitorStreams.layer.pipe(
+      Layer.provide(events),
+      Layer.provide(repository),
+      Layer.provide(CheckUptime.layer),
+      Layer.provide(BunHttpClient.layer),
     )
 
+    const api = MonitorApi.layer.pipe(Layer.provide(repository), Layer.provide(database))
     const webApp = HttpStaticServer.layer({ root: staticRoot, spa: true })
-
-    return HttpRouter.serve(Layer.mergeAll(webApp, api)).pipe(
+    const served = HttpRouter.serve(Layer.mergeAll(webApp, api)).pipe(
       Layer.provide(BunHttpServer.layer({ port })),
     )
+
+    // Building the streams layer subscribes to monitor events and starts the
+    // saved monitors, so sequence it before the server accepts requests.
+    const server = streams.pipe(Layer.flatMap(() => served))
+
+    const logging = Layer.effectDiscard(
+      Effect.gen(function* () {
+        const monitorStreams = yield* MonitorStreams.MonitorStreams
+        yield* Stream.runForEach(monitorStreams.observations, Effect.log)
+      }),
+    ).pipe(Layer.provide(streams))
+
+    return Layer.merge(server, logging)
   }),
 )
 
-const checker = Layer.effectDiscard(Effect.forkScoped(uptimeChecker))
-
-BunRuntime.runMain(Layer.launch(Layer.mergeAll(application, checker)))
+BunRuntime.runMain(Layer.launch(application))
