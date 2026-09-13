@@ -13,10 +13,11 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "effect": "^4.0.0-rc.112"
+    "@effect/platform-bun": "^4.0.0-rc.113",
+    "effect": "^4.0.0-rc.113"
   },
   "devDependencies": {
-    "@effect/vitest": "^4.0.0-rc.112",
+    "@effect/vitest": "^4.0.0-rc.113",
     "@types/bun": "latest",
     "husky": "^9.1.7",
     "lint-staged": "^17.5.0",

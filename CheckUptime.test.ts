@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Duration, Effect, Fiber, Layer, Ref } from "effect"
+import { Duration, Effect, Fiber, Layer, Ref, Result } from "effect"
 import { TestClock } from "effect/testing"
 import {
   Headers,
@@ -58,9 +58,10 @@ describe(CheckUptime.name, () => {
       const result = yield* useCase(request)
 
       // Assert
-      expect(result.status).toBe(200)
-      expect(result.body).toBe("pong")
-      expect(Duration.toMillis(result.duration)).toBe(0)
+      const response = Result.getOrThrow(result.response)
+      expect(response.status).toBe(200)
+      expect(response.body).toBe("pong")
+      expect(Duration.toMillis(response.duration)).toBe(0)
     }).pipe(
       Effect.provide(checkUptimeUseCaseLayer),
       Effect.provide(testClient((request) => respond(request, "pong"))),
@@ -76,8 +77,9 @@ describe(CheckUptime.name, () => {
       const result = yield* useCase(request)
 
       // Assert
-      expect(result.status).toBe(503)
-      expect(result.body).toBe("maintenance")
+      const response = Result.getOrThrow(result.response)
+      expect(response.status).toBe(503)
+      expect(response.body).toBe("maintenance")
     }).pipe(
       Effect.provide(checkUptimeUseCaseLayer),
       Effect.provide(testClient((request) => respond(request, "maintenance", 503))),
@@ -106,7 +108,7 @@ describe(CheckUptime.name, () => {
       // Assert
       const requestParams = yield* Ref.get(seen)
       expect(requestParams?.method).toBe("POST")
-      expect(requestParams?.url).toBe("https://example.test:8080")
+      expect(requestParams?.url).toBe("https://example.test:8080/")
       expect(requestParams?.headers["x-check-token"]).toBe("secret")
     }).pipe(Effect.provide(checkUptimeUseCaseLayer), Effect.provide(client))
   })
@@ -127,13 +129,13 @@ describe(CheckUptime.name, () => {
       yield* useCase({ ...request, protocol: "http" })
 
       // Assert
-      expect(yield* Ref.get(seen)).toBe("http://example.test:8080")
+      expect(yield* Ref.get(seen)).toBe("http://example.test:8080/")
 
       // Act
       yield* useCase({ ...request, protocol: "https" })
 
       // Assert
-      expect(yield* Ref.get(seen)).toBe("https://example.test:8080")
+      expect(yield* Ref.get(seen)).toBe("https://example.test:8080/")
     }).pipe(Effect.provide(checkUptimeUseCaseLayer), Effect.provide(client))
   })
 
@@ -148,8 +150,9 @@ describe(CheckUptime.name, () => {
       const result = yield* Fiber.join(fiber)
 
       // Assert
-      expect(result.body).toBe("slow")
-      expect(Duration.toMillis(result.duration)).toBe(500)
+      const response = Result.getOrThrow(result.response)
+      expect(response.body).toBe("slow")
+      expect(Duration.toMillis(response.duration)).toBe(500)
     }).pipe(
       Effect.provide(checkUptimeUseCaseLayer),
       Effect.provide(
@@ -162,16 +165,19 @@ describe(CheckUptime.name, () => {
     ),
   )
 
-  it.effect("fails with an HttpClientError when the endpoint cannot be reached", () =>
+  it.effect("captures an unreachable endpoint as a failed observation", () =>
     Effect.gen(function* () {
       // Arrange
       const useCase = yield* CheckUptime
 
       // Act
-      const error = yield* Effect.flip(useCase(request))
+      const result = yield* useCase(request)
 
       // Assert
-      expect(error).toBeInstanceOf(HttpClientError.HttpClientError)
+      expect(Result.isFailure(result.response)).toBe(true)
+      if (Result.isFailure(result.response)) {
+        expect(result.response.failure).toBeInstanceOf(HttpClientError.HttpClientError)
+      }
     }).pipe(Effect.provide(checkUptimeUseCaseLayer), Effect.provide(testClient(unreachable))),
   )
 })
