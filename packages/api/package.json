@@ -7,10 +7,12 @@
     "start": "bun src/index.ts",
     "dev": "bun --watch src/index.ts",
     "typecheck": "tsc",
-    "test": "vitest run"
+    "test": "bun --bun vitest run"
   },
   "dependencies": {
     "@effect/platform-bun": "^4.0.0-rc.115",
+    "@effect/sql-sqlite-bun": "4.0.0-rc.115",
+    "@uptime-watchdog/common": "workspace:*",
     "effect": "^4.0.0-rc.115"
   },
   "devDependencies": {

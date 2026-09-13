@@ -1,54 +1,62 @@
 import { BunHttpClient, BunHttpServer, BunRuntime } from '@effect/platform-bun'
-import { Context, Effect, Layer, pipe, Schedule, Stream } from 'effect'
+import { Monitor } from '@uptime-watchdog/common'
+import { Context, Cron, Effect, Layer, pipe, Result, Schedule, Stream } from 'effect'
 import { HttpRouter, HttpStaticServer } from 'effect/unstable/http'
 import * as CheckUptime from './CheckUptime'
 import * as AppConfig from './Config'
-import { type ServiceMonitorConfiguration } from './Types'
+import * as Database from './Database'
+import * as MonitorApi from './MonitorApi'
+import * as MonitorRepository from './MonitorRepository'
 
-class ServiceConfigurationSource extends Context.Service<
-  ServiceConfigurationSource,
-  ServiceMonitorConfiguration[]
->()('ServiceConfigurationSource') {
-  static layerStatic = Layer.succeed(ServiceConfigurationSource, [])
+class MonitorSource extends Context.Service<MonitorSource, ReadonlyArray<Monitor>>()(
+  'MonitorSource',
+) {
+  static layerStatic = Layer.succeed(MonitorSource, [])
 }
 
 const uptimeChecker = Effect.gen(function* () {
-  const serviceConfigurations = yield* ServiceConfigurationSource
+  const monitors = yield* MonitorSource
   const checkUptime = yield* CheckUptime.CheckUptime
 
   const stream = Stream.mergeAll({ concurrency: 'unbounded' })(
-    serviceConfigurations.map((configuration) =>
-      createServiceMonitorStream(configuration, checkUptime),
-    ),
+    monitors.map((monitor) => createMonitorStream(monitor, checkUptime)),
   )
 
   yield* Stream.runForEach(stream, Effect.log)
 }).pipe(
   Effect.provide(CheckUptime.layer),
-  Effect.provide(ServiceConfigurationSource.layerStatic),
+  Effect.provide(MonitorSource.layerStatic),
   Effect.provide(BunHttpClient.layer),
 )
 
-const createServiceMonitorStream = (
-  configuration: ServiceMonitorConfiguration,
-  checkUptime: CheckUptime.Interface,
-) =>
+const createMonitorStream = (monitor: Monitor, checkUptime: CheckUptime.Interface) =>
   pipe(
     Stream.fromEffectSchedule(
-      checkUptime(configuration.requestConfiguration),
-      Schedule.cron(configuration.cronSchedule),
+      checkUptime(monitor.request),
+      Schedule.cron(Result.getOrThrow(Cron.parse(monitor.cronSchedule))),
     ),
-    Stream.map((observation) => ({ serviceId: configuration.serviceId, observation })),
+    Stream.map((observation) => ({ monitorId: monitor.id, observation })),
   )
 
-const staticServer = Layer.unwrap(
+const application = Layer.unwrap(
   Effect.gen(function* () {
-    const { port, staticRoot } = yield* AppConfig.server
+    const { port, staticRoot, databasePath } = yield* AppConfig.server
+
+    const database = Database.layer(databasePath)
+
+    const api = MonitorApi.layer.pipe(
+      Layer.provide(MonitorRepository.layer),
+      Layer.provide(database),
+    )
+
     const webApp = HttpStaticServer.layer({ root: staticRoot, spa: true })
-    return HttpRouter.serve(webApp).pipe(Layer.provide(BunHttpServer.layer({ port })))
+
+    return HttpRouter.serve(Layer.mergeAll(webApp, api)).pipe(
+      Layer.provide(BunHttpServer.layer({ port })),
+    )
   }),
 )
 
 const checker = Layer.effectDiscard(Effect.forkScoped(uptimeChecker))
 
-BunRuntime.runMain(Layer.launch(Layer.mergeAll(staticServer, checker)))
+BunRuntime.runMain(Layer.launch(Layer.mergeAll(application, checker)))
