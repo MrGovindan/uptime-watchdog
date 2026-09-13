@@ -4,7 +4,7 @@ import { Layer } from 'effect'
 import { migrationSet } from '../migrations'
 
 export const layer = (filename: string) => {
-  const client = SqliteClient.layer({ filename })
+  const client = SqliteClient.layer({ filename, create: true })
 
   const migrator = SqliteMigrator.layer({
     loader: SqliteMigrator.fromRecord(migrationSet),

@@ -8,4 +8,9 @@ export default defineConfig({
   optimizeDeps: {
     entries: ['src/entry.ts'],
   },
+  server: {
+    proxy: {
+      '/monitor': 'http://localhost:3000',
+    },
+  },
 })

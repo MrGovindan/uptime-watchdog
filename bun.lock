@@ -41,6 +41,8 @@
       "version": "0.0.0",
       "dependencies": {
         "@effect/platform-browser": "4.0.0-rc.115",
+        "@foldkit/ui": "0.160.0",
+        "@uptime-watchdog/common": "workspace:*",
         "effect": "4.0.0-rc.115",
         "foldkit": "0.160.0",
       },

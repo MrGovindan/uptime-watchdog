@@ -14,6 +14,21 @@ Unit tests are a supplement, not the baseline. Add them only when:
 When a contract is defined by `HttpApi` (status codes, response bodies, default
 error shapes), integration tests are responsible for locking that contract down.
 
+Commands that merely delegate to a service already covered by other tests do not
+need their own tests. When a command does real work (HTTP calls,
+encoding/decoding, retries), test its `Effect` directly with a mocked layer for
+that service.
+
+## Data, calculations, and actions
+
+Borrow Eric Normand's framing (*Grokking Simplicity*): **data** is inert facts,
+**calculations** are pure functions of their inputs, and **actions** depend on
+when and where they run (side effects). Foldkit mirrors this. The Model is data,
+`update` and `view` are calculations, and Commands and Subscriptions are
+actions. Keep the boundaries honest: never perform an action inside a
+calculation, and keep data plain. This is also why Commands that only delegate
+deserve less test ceremony than Commands that do real work.
+
 ## Naming
 
 Prefer singular over plural for resource endpoints and database tables, and keep
