@@ -1,12 +1,12 @@
-import { BunHttpClient, BunRuntime } from "@effect/platform-bun"
-import { Context, Effect, Layer, pipe, Schedule, Stream } from "effect"
-import * as CheckUptime from "./CheckUptime"
-import { type ServiceMonitorConfiguration } from "./Types"
+import { BunHttpClient, BunRuntime } from '@effect/platform-bun'
+import { Context, Effect, Layer, pipe, Schedule, Stream } from 'effect'
+import * as CheckUptime from './CheckUptime'
+import { type ServiceMonitorConfiguration } from './Types'
 
 class ServiceConfigurationSource extends Context.Service<
   ServiceConfigurationSource,
   ServiceMonitorConfiguration[]
->()("ServiceConfigurationSource") {
+>()('ServiceConfigurationSource') {
   static layerStatic = Layer.succeed(ServiceConfigurationSource, [])
 }
 
@@ -14,7 +14,7 @@ const program = Effect.gen(function* () {
   const serviceConfigurations = yield* ServiceConfigurationSource
   const checkUptime = yield* CheckUptime.CheckUptime
 
-  const stream = Stream.mergeAll({ concurrency: "unbounded" })(
+  const stream = Stream.mergeAll({ concurrency: 'unbounded' })(
     serviceConfigurations.map((configuration) =>
       createServiceMonitorStream(configuration, checkUptime),
     ),

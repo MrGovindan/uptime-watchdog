@@ -1,16 +1,16 @@
-import { Cron, DateTime, Effect, Result, Schema, SchemaGetter, SchemaIssue } from "effect"
-import { HttpMethod as Hm, HttpClientError } from "effect/unstable/http"
+import { Cron, DateTime, Effect, Result, Schema, SchemaGetter, SchemaIssue } from 'effect'
+import { HttpMethod as Hm, HttpClientError } from 'effect/unstable/http'
 
 export const Uuid = Schema.String.pipe(Schema.check(Schema.isUUID()))
 export type Uuid = typeof Uuid.Type
 
-export const ServiceId = Schema.brand("ServiceId")(Uuid)
+export const ServiceId = Schema.brand('ServiceId')(Uuid)
 export type ServiceId = typeof ServiceId.Type
 
 export const HttpMethod = Schema.String.pipe(Schema.refine(Hm.isHttpMethod))
 export type HttpMethod = Hm.HttpMethod
 
-export const Protocol = Schema.Literals(["http", "https"])
+export const Protocol = Schema.Literals(['http', 'https'])
 export type Protocol = typeof Protocol.Type
 
 export const Hostname = Schema.Trim.pipe(Schema.check(Schema.isNonEmpty()))
@@ -20,8 +20,8 @@ export const Port = Schema.Int.pipe(Schema.check(Schema.isGreaterThan(0)))
 export type Port = typeof Port.Type
 
 const CronFromSelf = Schema.declare(Cron.isCron, {
-  identifier: "Cron",
-  description: "A parsed Cron schedule",
+  identifier: 'Cron',
+  description: 'A parsed Cron schedule',
 })
 
 export const CronExpression = Schema.String.pipe(

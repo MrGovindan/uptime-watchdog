@@ -1,16 +1,16 @@
-import { Context, DateTime, Effect, Layer, Option, pipe } from "effect"
-import { HttpClient, HttpClientRequest } from "effect/unstable/http"
-import type { UptimeObservation, UptimeRequest } from "./Types"
+import { Context, DateTime, Effect, Layer, Option, pipe } from 'effect'
+import { HttpClient, HttpClientRequest } from 'effect/unstable/http'
+import type { UptimeObservation, UptimeRequest } from './Types'
 
 export type Interface = (server: UptimeRequest) => Effect.Effect<UptimeObservation>
 
-export class CheckUptime extends Context.Service<CheckUptime, Interface>()("CheckUptimeUseCase") {}
+export class CheckUptime extends Context.Service<CheckUptime, Interface>()('CheckUptimeUseCase') {}
 
 const buildRequest = (request: UptimeRequest): HttpClientRequest.HttpClientRequest => {
   const path = pipe(
     Option.fromUndefinedOr(request.path),
-    Option.map((path) => (path.startsWith("/") ? path.slice(1) : path)),
-    Option.getOrElse(() => ""),
+    Option.map((path) => (path.startsWith('/') ? path.slice(1) : path)),
+    Option.getOrElse(() => ''),
   )
   return HttpClientRequest.make(request.method)(
     `${request.protocol}://${request.hostname}:${request.port}/${path}`,

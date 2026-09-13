@@ -1,12 +1,13 @@
-import { defineConfig } from "oxlint"
+import { defineConfig } from 'oxlint'
 
 export default defineConfig({
-  plugins: ["typescript", "unicorn", "oxc"],
+  plugins: ['typescript', 'unicorn', 'oxc'],
   categories: {
-    correctness: "error",
+    correctness: 'error',
   },
   rules: {},
   env: {
     builtin: true,
   },
+  ignorePatterns: ['repos/**'],
 })

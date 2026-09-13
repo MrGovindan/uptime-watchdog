@@ -1,15 +1,15 @@
-import { describe, expect, it } from "@effect/vitest"
-import { Duration, Effect, Fiber, Layer, Ref, Result } from "effect"
-import { TestClock } from "effect/testing"
+import { describe, expect, it } from '@effect/vitest'
+import { Duration, Effect, Fiber, Layer, Ref, Result } from 'effect'
+import { TestClock } from 'effect/testing'
 import {
   Headers,
   HttpClient,
   HttpClientError,
   HttpClientRequest,
   HttpClientResponse,
-} from "effect/unstable/http"
-import { fromInput as headersFromInput } from "effect/unstable/http/Headers"
-import { CheckUptime, layer as checkUptimeUseCaseLayer } from "./CheckUptime.ts"
+} from 'effect/unstable/http'
+import { fromInput as headersFromInput } from 'effect/unstable/http/Headers'
+import { CheckUptime, layer as checkUptimeUseCaseLayer } from './CheckUptime.ts'
 
 type Handler = (
   request: HttpClientRequest.HttpClientRequest,
@@ -35,21 +35,21 @@ const unreachable = (
     new HttpClientError.HttpClientError({
       reason: new HttpClientError.TransportError({
         request,
-        description: "connection refused",
+        description: 'connection refused',
       }),
     }),
   )
 
 const request = {
-  hostname: "example.test",
+  hostname: 'example.test',
   port: 8080,
-  method: "GET",
-  protocol: "https",
+  method: 'GET',
+  protocol: 'https',
   headers: Headers.empty,
 } as const
 
 describe(CheckUptime.name, () => {
-  it.effect("reports a responding endpoint with its status, body, and duration", () =>
+  it.effect('reports a responding endpoint with its status, body, and duration', () =>
     Effect.gen(function* () {
       // Arrange
       const useCase = yield* CheckUptime
@@ -60,15 +60,15 @@ describe(CheckUptime.name, () => {
       // Assert
       const response = Result.getOrThrow(result.response)
       expect(response.status).toBe(200)
-      expect(response.body).toBe("pong")
+      expect(response.body).toBe('pong')
       expect(Duration.toMillis(response.duration)).toBe(0)
     }).pipe(
       Effect.provide(checkUptimeUseCaseLayer),
-      Effect.provide(testClient((request) => respond(request, "pong"))),
+      Effect.provide(testClient((request) => respond(request, 'pong'))),
     ),
   )
 
-  it.effect("records a non-2xx status as a successful check", () =>
+  it.effect('records a non-2xx status as a successful check', () =>
     Effect.gen(function* () {
       // Arrange
       const useCase = yield* CheckUptime
@@ -79,20 +79,20 @@ describe(CheckUptime.name, () => {
       // Assert
       const response = Result.getOrThrow(result.response)
       expect(response.status).toBe(503)
-      expect(response.body).toBe("maintenance")
+      expect(response.body).toBe('maintenance')
     }).pipe(
       Effect.provide(checkUptimeUseCaseLayer),
-      Effect.provide(testClient((request) => respond(request, "maintenance", 503))),
+      Effect.provide(testClient((request) => respond(request, 'maintenance', 503))),
     ),
   )
 
-  it.effect("sends a request built from the monitor configuration", () => {
+  it.effect('sends a request built from the monitor configuration', () => {
     // Arrange
     const seen = Effect.runSync(
       Ref.make<HttpClientRequest.HttpClientRequest | undefined>(undefined),
     )
     const client = testClient((request) =>
-      Ref.set(seen, request).pipe(Effect.as(HttpClientResponse.fromWeb(request, new Response("")))),
+      Ref.set(seen, request).pipe(Effect.as(HttpClientResponse.fromWeb(request, new Response('')))),
     )
 
     return Effect.gen(function* () {
@@ -101,24 +101,24 @@ describe(CheckUptime.name, () => {
       // Act
       yield* useCase({
         ...request,
-        method: "POST",
-        headers: headersFromInput({ "x-check-token": "secret" }),
+        method: 'POST',
+        headers: headersFromInput({ 'x-check-token': 'secret' }),
       })
 
       // Assert
       const requestParams = yield* Ref.get(seen)
-      expect(requestParams?.method).toBe("POST")
-      expect(requestParams?.url).toBe("https://example.test:8080/")
-      expect(requestParams?.headers["x-check-token"]).toBe("secret")
+      expect(requestParams?.method).toBe('POST')
+      expect(requestParams?.url).toBe('https://example.test:8080/')
+      expect(requestParams?.headers['x-check-token']).toBe('secret')
     }).pipe(Effect.provide(checkUptimeUseCaseLayer), Effect.provide(client))
   })
 
-  it.effect("uses the configured protocol for the request", () => {
+  it.effect('uses the configured protocol for the request', () => {
     // Arrange
     const seen = Effect.runSync(Ref.make<string | undefined>(undefined))
     const client = testClient((request) =>
       Ref.set(seen, request.url).pipe(
-        Effect.as(HttpClientResponse.fromWeb(request, new Response(""))),
+        Effect.as(HttpClientResponse.fromWeb(request, new Response(''))),
       ),
     )
 
@@ -126,20 +126,20 @@ describe(CheckUptime.name, () => {
       const useCase = yield* CheckUptime
 
       // Act
-      yield* useCase({ ...request, protocol: "http" })
+      yield* useCase({ ...request, protocol: 'http' })
 
       // Assert
-      expect(yield* Ref.get(seen)).toBe("http://example.test:8080/")
+      expect(yield* Ref.get(seen)).toBe('http://example.test:8080/')
 
       // Act
-      yield* useCase({ ...request, protocol: "https" })
+      yield* useCase({ ...request, protocol: 'https' })
 
       // Assert
-      expect(yield* Ref.get(seen)).toBe("https://example.test:8080/")
+      expect(yield* Ref.get(seen)).toBe('https://example.test:8080/')
     }).pipe(Effect.provide(checkUptimeUseCaseLayer), Effect.provide(client))
   })
 
-  it.effect("returns a slow response with its measured duration once it arrives", () =>
+  it.effect('returns a slow response with its measured duration once it arrives', () =>
     Effect.gen(function* () {
       // Arrange
       const useCase = yield* CheckUptime
@@ -151,21 +151,21 @@ describe(CheckUptime.name, () => {
 
       // Assert
       const response = Result.getOrThrow(result.response)
-      expect(response.body).toBe("slow")
+      expect(response.body).toBe('slow')
       expect(Duration.toMillis(response.duration)).toBe(500)
     }).pipe(
       Effect.provide(checkUptimeUseCaseLayer),
       Effect.provide(
         testClient((request) =>
           Effect.sleep(Duration.millis(500)).pipe(
-            Effect.as(HttpClientResponse.fromWeb(request, new Response("slow"))),
+            Effect.as(HttpClientResponse.fromWeb(request, new Response('slow'))),
           ),
         ),
       ),
     ),
   )
 
-  it.effect("captures an unreachable endpoint as a failed observation", () =>
+  it.effect('captures an unreachable endpoint as a failed observation', () =>
     Effect.gen(function* () {
       // Arrange
       const useCase = yield* CheckUptime

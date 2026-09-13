@@ -6,8 +6,8 @@
   ],
   "type": "module",
   "scripts": {
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
+    "lint": "oxlint --disable-nested-config",
+    "lint:fix": "oxlint --fix --disable-nested-config",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "typecheck": "bun run --filter '*' typecheck",
