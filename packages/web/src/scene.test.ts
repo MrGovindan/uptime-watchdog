@@ -1,8 +1,14 @@
-import { Cron } from 'effect'
+import { NotValidated } from 'foldkit/fieldValidation'
 import { expect, given, role, scene, submit, text } from 'foldkit/scene'
+import { evo } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { modelWithEmptyList, modelWithMonitors, modelWithOpenDialog, monitor } from './fixtures'
+import {
+  modelReadyToCreate,
+  modelWithEmptyList,
+  modelWithMonitors,
+  modelWithOpenDialog,
+} from './fixtures'
 import { update, view } from './main'
 
 describe('view', () => {
@@ -14,13 +20,25 @@ describe('view', () => {
     )
   })
 
-  test('renders each monitor with its URL and schedule', () => {
+  test('renders each monitor with its URL and a friendly schedule description', () => {
     scene(
       { update, view },
       given(modelWithMonitors),
       expect(text('https://example.com:443')).toExist(),
-      expect(text(Cron.format(monitor.cronSchedule))).toExist(),
+      expect(text('Every 5 minutes')).toExist(),
     )
+  })
+
+  test('shows a friendly description of the entered cron schedule', () => {
+    scene({ update, view }, given(modelReadyToCreate), expect(text('Every 5 minutes')).toExist())
+  })
+
+  test('shows an error when the entered cron schedule is not valid', () => {
+    const model = evo(modelWithOpenDialog, {
+      form: (form) => evo(form, { cronSchedule: () => NotValidated({ value: 'not a cron' }) }),
+    })
+
+    scene({ update, view }, given(model), expect(text('Enter a valid cron expression')).toExist())
   })
 
   test('submitting an empty form reveals validation errors and dispatches no command', () => {
@@ -29,7 +47,7 @@ describe('view', () => {
       given(modelWithOpenDialog),
       submit(role('form')),
       expect(text('Hostname is required')).toExist(),
-      expect(text('Cron schedule is required')).toExist(),
+      expect(text('Enter a valid cron expression')).toExist(),
     )
   })
 })

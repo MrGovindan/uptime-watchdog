@@ -6,7 +6,7 @@ import {
   Protocol,
 } from '@uptime-watchdog/common'
 import { Button, Dialog, Input, Select } from '@foldkit/ui'
-import { Array, Cron, Option, Predicate, Schema } from 'effect'
+import { Array, Cron, Option, Predicate, Result, Schema } from 'effect'
 import { AsyncData, FieldValidation, Runtime, Update } from 'foldkit'
 import {
   Field,
@@ -22,6 +22,7 @@ import { evo } from 'foldkit/struct'
 
 import { ApiClient } from './apiClient'
 import { ListMonitors, RegisterMonitor } from './command'
+import { describeCron } from './cronDescription'
 import { Message } from './message'
 import { Toast } from './toast'
 
@@ -35,6 +36,14 @@ const toProtocol = (value: string): Protocol => (value === 'http' ? 'http' : 'ht
 // FIELD VALIDATION
 
 const isBlank = (value: string): boolean => value.trim() === ''
+
+const parseCron = (expression: string): Option.Option<Cron.Cron> =>
+  Cron.parse(expression.trim()).pipe(
+    Result.match({
+      onFailure: () => Option.none(),
+      onSuccess: (cron) => Option.some(cron),
+    }),
+  )
 
 const hostnameRules = makeRules({
   required: 'Hostname is required',
@@ -421,6 +430,7 @@ const INPUT_CLASS =
 const SELECT_CLASS =
   'w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
 const ERROR_CLASS = 'text-sm text-red-600'
+const HELPER_CLASS = 'text-sm text-gray-500'
 const BUTTON_CLASS =
   'rounded-md px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500'
 const PRIMARY_BUTTON_CLASS = `${BUTTON_CLASS} bg-blue-600 text-white hover:bg-blue-700`
@@ -430,8 +440,8 @@ const DIALOG_CLASS = 'fixed inset-0 z-50 grid place-items-center p-4'
 const BACKDROP_CLASS = 'fixed inset-0 bg-black/40'
 const PANEL_CLASS = 'relative z-10 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl'
 
-const inputClass = (field: Field<string>): string =>
-  field._tag === 'Invalid' ? `${INPUT_CLASS} border-red-500` : `${INPUT_CLASS} border-gray-300`
+const inputClass = (isInvalid: boolean): string =>
+  isInvalid ? `${INPUT_CLASS} border-red-500` : `${INPUT_CLASS} border-gray-300`
 
 const fieldError = (
   field: Field<string>,
@@ -453,27 +463,38 @@ const fieldInput = (
   onInput: (value: string) => Message,
   type: string,
   h: HtmlBuilder<Message>,
-): Html =>
-  Input.view(
+  options?: Readonly<{ description?: string; error?: string }>,
+): Html => {
+  const description = options?.description
+  const error = options?.error
+  const isInvalid = field._tag === 'Invalid' || error !== undefined
+
+  return Input.view(
     {
       id,
       value: field.value,
       onInput,
-      isInvalid: field._tag === 'Invalid',
-      hasDescription: field._tag === 'Invalid',
+      isInvalid,
+      hasDescription: isInvalid || description !== undefined,
       type,
       toView: (attributes) =>
         h.div(
           [h.Class('space-y-1')],
           [
             h.label([...attributes.label, h.Class(LABEL_CLASS)], [labelText]),
-            h.input([...attributes.input, h.Class(inputClass(field))]),
-            fieldError(field, attributes.description, h),
+            h.input([...attributes.input, h.Class(inputClass(isInvalid))]),
+            error === undefined
+              ? fieldError(field, attributes.description, h)
+              : h.span([...attributes.description, h.Class(ERROR_CLASS)], [error]),
+            ...(description === undefined || isInvalid
+              ? []
+              : [h.p([...attributes.description, h.Class(HELPER_CLASS)], [description])]),
           ],
         ),
     },
     h,
   )
+}
 
 const plainInput = (
   id: string,
@@ -643,6 +664,10 @@ const addMonitorForm = (
         (value) => Message.UpdatedCronSchedule({ value }),
         'text',
         h,
+        Option.match(parseCron(model.form.cronSchedule.value), {
+          onNone: () => ({ error: 'Enter a valid cron expression' }),
+          onSome: (cron) => ({ description: describeCron(cron) }),
+        }),
       ),
       headersInput(model.form, h),
       h.div(
@@ -743,7 +768,7 @@ const monitorRow = (monitor: Monitor, h: HtmlBuilder<Message>): Html =>
         [h.Class('mt-2 grid grid-cols-2 gap-1 text-sm text-gray-600')],
         [
           h.dt([], ['Schedule']),
-          h.dd([], [Cron.format(monitor.cronSchedule)]),
+          h.dd([], [describeCron(monitor.cronSchedule)]),
           h.dt([], ['Created']),
           h.dd([], [new Date(monitor.createdAt).toLocaleString()]),
         ],
