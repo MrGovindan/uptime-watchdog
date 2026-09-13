@@ -1,0 +1,18 @@
+{
+  "name": "@uptime-watchdog/api",
+  "private": true,
+  "type": "module",
+  "module": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@effect/platform-bun": "^4.0.0-rc.113",
+    "effect": "^4.0.0-rc.113"
+  },
+  "devDependencies": {
+    "@effect/vitest": "^4.0.0-rc.113",
+    "vitest": "^4.1.11"
+  }
+}

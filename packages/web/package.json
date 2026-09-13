@@ -1,0 +1,9 @@
+{
+  "name": "@uptime-watchdog/web",
+  "private": true,
+  "type": "module",
+  "module": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc"
+  }
+}

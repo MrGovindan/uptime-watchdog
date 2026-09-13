@@ -1,31 +1,26 @@
 {
   "name": "uptime-watchdog",
   "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "type": "module",
-  "module": "index.ts",
   "scripts": {
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "typecheck": "tsc",
-    "test": "vitest run",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun run --filter '*' test",
     "prepare": "husky"
   },
-  "dependencies": {
-    "@effect/platform-bun": "^4.0.0-rc.113",
-    "effect": "^4.0.0-rc.113"
-  },
   "devDependencies": {
-    "@effect/vitest": "^4.0.0-rc.113",
     "@types/bun": "latest",
     "husky": "^9.1.7",
     "lint-staged": "^17.5.0",
     "oxfmt": "^0.67.0",
-    "oxlint": "^1.82.0"
-  },
-  "peerDependencies": {
-    "typescript": "^7"
+    "oxlint": "^1.82.0",
+    "typescript": "^7.0.2"
   },
   "lint-staged": {
     "*.ts": [
