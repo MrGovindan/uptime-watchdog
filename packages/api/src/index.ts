@@ -1,6 +1,8 @@
-import { BunHttpClient, BunRuntime } from '@effect/platform-bun'
+import { BunHttpClient, BunHttpServer, BunRuntime } from '@effect/platform-bun'
 import { Context, Effect, Layer, pipe, Schedule, Stream } from 'effect'
+import { HttpRouter, HttpStaticServer } from 'effect/unstable/http'
 import * as CheckUptime from './CheckUptime'
+import * as AppConfig from './Config'
 import { type ServiceMonitorConfiguration } from './Types'
 
 class ServiceConfigurationSource extends Context.Service<
@@ -10,7 +12,7 @@ class ServiceConfigurationSource extends Context.Service<
   static layerStatic = Layer.succeed(ServiceConfigurationSource, [])
 }
 
-const program = Effect.gen(function* () {
+const uptimeChecker = Effect.gen(function* () {
   const serviceConfigurations = yield* ServiceConfigurationSource
   const checkUptime = yield* CheckUptime.CheckUptime
 
@@ -39,4 +41,14 @@ const createServiceMonitorStream = (
     Stream.map((observation) => ({ serviceId: configuration.serviceId, observation })),
   )
 
-BunRuntime.runMain(program)
+const staticServer = Layer.unwrap(
+  Effect.gen(function* () {
+    const { port, staticRoot } = yield* AppConfig.server
+    const webApp = HttpStaticServer.layer({ root: staticRoot, spa: true })
+    return HttpRouter.serve(webApp).pipe(Layer.provide(BunHttpServer.layer({ port })))
+  }),
+)
+
+const checker = Layer.effectDiscard(Effect.forkScoped(uptimeChecker))
+
+BunRuntime.runMain(Layer.launch(Layer.mergeAll(staticServer, checker)))

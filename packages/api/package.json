@@ -4,6 +4,7 @@
   "type": "module",
   "module": "src/index.ts",
   "scripts": {
+    "start": "bun src/index.ts",
     "typecheck": "tsc",
     "test": "vitest run"
   },
