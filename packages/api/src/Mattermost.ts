@@ -48,8 +48,7 @@ const unavailable = (error: unknown): MattermostUnavailable =>
 const userNotFound = (userId: MattermostUserId): MattermostUserNotFound =>
   new MattermostUserNotFound({ mattermostUserId: userId })
 
-const isMissingUser = (error: MattermostError): boolean =>
-  error._tag === 'MattermostNotFound' || error._tag === 'MattermostForbidden'
+const isMissingUser = (error: MattermostError): boolean => error._tag === 'MattermostNotFound'
 
 const isRejectedToken = (error: MattermostError): boolean =>
   error._tag === 'MattermostUnauthorized' || error._tag === 'MattermostForbidden'
@@ -86,10 +85,12 @@ export const make = (options: Readonly<{ baseUrl: URL; apiToken: Redacted.Redact
         httpClient.pipe(HttpClient.mapRequest(HttpClientRequest.bearerToken(options.apiToken))),
     })
 
-    const fetchBot = (): Effect.Effect<MattermostApi.User, MattermostUnavailable> =>
-      client.users
-        .getUser({ params: { userId: 'me' } })
-        .pipe(Effect.mapError((error) => unavailable(error)))
+    const fetchBotId = yield* Effect.cached(
+      client.users.getUser({ params: { userId: 'me' } }).pipe(
+        Effect.map(({ id }) => id),
+        Effect.mapError((error) => unavailable(error)),
+      ),
+    )
 
     const fetchUser = (
       userId: MattermostUserId,
@@ -119,18 +120,11 @@ export const make = (options: Readonly<{ baseUrl: URL; apiToken: Redacted.Redact
       userId: MattermostUserId,
       message: string,
     ) {
-      const bot = yield* fetchBot()
-      yield* Effect.log('bot', bot)
+      const botId = yield* fetchBotId
 
       const channel = yield* client.channels
-        .createDirectChannel({ payload: [bot.id, userId] })
-        .pipe(
-          Effect.tapError(Effect.logError),
-          Effect.mapError((error) =>
-            isMissingUser(error) ? userNotFound(userId) : unavailable(error),
-          ),
-        )
-      yield* Effect.log('channel', channel)
+        .createDirectChannel({ payload: [botId, userId] })
+        .pipe(Effect.mapError((error) => unavailable(error)))
 
       yield* client.posts
         .createPost({ payload: { channel_id: channel.id, message } })

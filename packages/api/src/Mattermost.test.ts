@@ -1,4 +1,4 @@
-import { MattermostUserNotFound } from '@uptime-watchdog/common'
+import { MattermostUnavailable, MattermostUserNotFound } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
 import { Effect, Exit, Layer, Redacted, Ref } from 'effect'
 import {
@@ -78,6 +78,76 @@ describe(Mattermost.Mattermost.name, () => {
           request.url.endsWith('/users/me')
             ? me(request)
             : jsonResponse(request, { message: 'not found' }, 404),
+        ),
+      ),
+    ),
+  )
+
+  it.effect('surfaces a forbidden user lookup as unavailable with the upstream message', () =>
+    Effect.gen(function* () {
+      const mattermost = yield* Mattermost.Mattermost
+
+      const error = yield* mattermost.getUser('hidden').pipe(Effect.flip)
+
+      expect(error).toBeInstanceOf(MattermostUnavailable)
+      expect(error.message).toBe('You do not have permission to view this user.')
+    }).pipe(
+      Effect.provide(
+        serviceLayer((request) =>
+          request.url.endsWith('/users/me')
+            ? me(request)
+            : jsonResponse(
+                request,
+                { message: 'You do not have permission to view this user.' },
+                403,
+              ),
+        ),
+      ),
+    ),
+  )
+
+  it.effect('preserves the upstream message when a direct channel cannot be created', () =>
+    Effect.gen(function* () {
+      const mattermost = yield* Mattermost.Mattermost
+
+      const error = yield* mattermost
+        .sendDirectMessage('user-1', 'monitor is down')
+        .pipe(Effect.flip)
+
+      expect(error).toBeInstanceOf(MattermostUnavailable)
+      expect(error.message).toBe(
+        'A direct channel cannot be created between these users because they do not share a team in common.',
+      )
+    }).pipe(
+      Effect.provide(
+        serviceLayer((request) =>
+          request.url.endsWith('/users/me')
+            ? me(request)
+            : jsonResponse(
+                request,
+                {
+                  message:
+                    'A direct channel cannot be created between these users because they do not share a team in common.',
+                },
+                403,
+              ),
+        ),
+      ),
+    ),
+  )
+
+  it.effect('preserves the upstream message for a server error', () =>
+    Effect.gen(function* () {
+      const mattermost = yield* Mattermost.Mattermost
+
+      const error = yield* mattermost.searchUsers('jes').pipe(Effect.flip)
+
+      expect(error).toBeInstanceOf(MattermostUnavailable)
+      expect(error.message).toBe('Something went wrong with the server.')
+    }).pipe(
+      Effect.provide(
+        serviceLayer((request) =>
+          jsonResponse(request, { message: 'Something went wrong with the server.' }, 500),
         ),
       ),
     ),

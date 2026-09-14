@@ -32,14 +32,24 @@ export const MattermostBadRequest = responseError('MattermostBadRequest', 400)
 export const MattermostUnauthorized = responseError('MattermostUnauthorized', 401)
 export const MattermostForbidden = responseError('MattermostForbidden', 403)
 export const MattermostNotFound = responseError('MattermostNotFound', 404)
-export const MattermostServiceUnavailable = responseError('MattermostServiceUnavailable', 503)
+export const MattermostConflict = responseError('MattermostConflict', 409)
+export const MattermostTooLarge = responseError('MattermostTooLarge', 413)
+export const MattermostTooManyRequests = responseError('MattermostTooManyRequests', 429)
+export const MattermostInternalServerError = responseError('MattermostInternalServerError', 500)
+export const MattermostNotImplemented = responseError('MattermostNotImplemented', 501)
+export const MattermostBadGateway = responseError('MattermostBadGateway', 502)
 
 export const MattermostErrors = [
   MattermostBadRequest,
   MattermostUnauthorized,
   MattermostForbidden,
   MattermostNotFound,
-  MattermostServiceUnavailable,
+  MattermostConflict,
+  MattermostTooLarge,
+  MattermostTooManyRequests,
+  MattermostInternalServerError,
+  MattermostNotImplemented,
+  MattermostBadGateway,
 ] as const
 
 export const User = Schema.Struct({
