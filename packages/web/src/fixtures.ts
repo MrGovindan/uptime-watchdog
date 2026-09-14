@@ -1,6 +1,6 @@
 import { Monitor } from '@uptime-watchdog/common'
 import { Dialog } from '@foldkit/ui'
-import { Schema } from 'effect'
+import { Option, Schema } from 'effect'
 import { Valid } from 'foldkit/fieldValidation'
 import { evo } from 'foldkit/struct'
 
@@ -35,6 +35,23 @@ export const modelWithOpenDialog = evo(modelWithEmptyList, {
 })
 
 export const modelReadyToCreate = evo(modelWithOpenDialog, {
+  form: () => ({
+    ...makeInitialForm(),
+    name: Valid({ value: 'Prod API' }),
+    hostname: Valid({ value: 'example.com' }),
+    port: Valid({ value: '443' }),
+    cronSchedule: Valid({ value: '*/5 * * * *' }),
+  }),
+})
+
+export const updatedMonitor = Schema.decodeSync(Monitor.json)({
+  ...monitorJson,
+  name: 'Renamed API',
+})
+
+export const modelReadyToEdit = evo(modelWithMonitors, {
+  dialog: () => Dialog.init({ id: 'add-monitor-dialog', isOpen: true }),
+  editingMonitorId: () => Option.some(monitor.id),
   form: () => ({
     ...makeInitialForm(),
     name: Valid({ value: 'Prod API' }),

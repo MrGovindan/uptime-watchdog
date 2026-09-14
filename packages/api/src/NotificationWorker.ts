@@ -21,6 +21,7 @@ const retrySchedule = Schedule.max([Schedule.exponential('200 millis'), Schedule
 const deliveries = (event: WatchdogEvent): ReadonlyArray<Delivery> =>
   WatchdogEvent.match(event, {
     MonitorRegistered: () => [],
+    MonitorUpdated: () => [],
     MonitorDeleted: ({ monitor, targets }) =>
       targets.map((target) => ({
         userId: target.mattermostUserId,

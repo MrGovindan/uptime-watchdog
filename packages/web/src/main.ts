@@ -3,6 +3,7 @@ import {
   HttpMethod,
   MONITOR_NAME_MAX_LENGTH,
   Monitor,
+  MonitorId,
   MonitorName,
   type MonitorDefinition,
   Protocol,
@@ -23,7 +24,7 @@ import type { Attribute, ChildAttribute, Document, Html, HtmlBuilder } from 'fol
 import { evo } from 'foldkit/struct'
 
 import { ApiClient } from './apiClient'
-import { ListMonitors, RegisterMonitor } from './command'
+import { DeleteMonitor, ListMonitors, RegisterMonitor, UpdateMonitor } from './command'
 import { describeCron } from './cronDescription'
 import { Message } from './message'
 import * as NotificationTargets from './notificationTargets'
@@ -117,7 +118,10 @@ export const MonitorsAsyncData = AsyncData.Schema(Schema.Array(Monitor), Schema.
 export const Model = Schema.Struct({
   monitors: MonitorsAsyncData.schema,
   form: Form,
+  editingMonitorId: Schema.Option(MonitorId),
   dialog: Dialog.Model,
+  deleteDialog: Dialog.Model,
+  maybeDeleteMonitor: Schema.Option(Monitor),
   notificationTargets: NotificationTargets.Model,
   toast: Toast.Model,
 })
@@ -137,10 +141,33 @@ export const makeInitialForm = (): Form => ({
   headerSequence: 0,
 })
 
+const formForMonitor = (monitor: Monitor): Form => {
+  const headers = Array.map(Object.entries(monitor.request.headers), ([name, value], index) => ({
+    id: `header-${index}`,
+    name: NotValidated({ value: name }),
+    value: NotValidated({ value }),
+  }))
+
+  return {
+    name: NotValidated({ value: monitor.name }),
+    hostname: NotValidated({ value: monitor.request.hostname }),
+    port: NotValidated({ value: String(monitor.request.port) }),
+    protocol: monitor.request.protocol,
+    method: monitor.request.method,
+    path: monitor.request.path ?? '',
+    cronSchedule: NotValidated({ value: Cron.format(monitor.cronSchedule) }),
+    headers,
+    headerSequence: headers.length,
+  }
+}
+
 export const makeInitialModel = (): Model => ({
   monitors: MonitorsAsyncData.Loading(),
   form: makeInitialForm(),
+  editingMonitorId: Option.none(),
   dialog: Dialog.init({ id: 'add-monitor-dialog' }),
+  deleteDialog: Dialog.init({ id: 'delete-monitor-dialog' }),
+  maybeDeleteMonitor: Option.none(),
   notificationTargets: NotificationTargets.init().model,
   toast: Toast.init({ id: 'app-toast' }),
 })
@@ -243,7 +270,8 @@ const writeDialog = (model: Model, nextDialog: Dialog.Model): Model =>
 const toAddMonitorDialogMessage = (message: Dialog.Message): Message =>
   Message.GotAddMonitorDialogMessage({ message })
 
-const resetForm = (model: Model): Model => evo(model, { form: () => makeInitialForm() })
+const resetForm = (model: Model): Model =>
+  evo(model, { form: () => makeInitialForm(), editingMonitorId: () => Option.none() })
 
 const foldAddMonitorDialogOutMessage = Dialog.OutMessage.match<Update.Step<Model, Message>>({
   Opened: () => (model) => ({ model }),
@@ -272,6 +300,41 @@ const foldCloseAddMonitorDialog = Update.foldChildStep({
   write: writeDialog,
   toParentMessage: toAddMonitorDialogMessage,
   foldOutMessage: foldAddMonitorDialogOutMessage,
+})
+
+const readDeleteDialog = (model: Model) => Option.some(model.deleteDialog)
+const writeDeleteDialog = (model: Model, nextDialog: Dialog.Model): Model =>
+  evo(model, { deleteDialog: () => nextDialog })
+const toDeleteMonitorDialogMessage = (message: Dialog.Message): Message =>
+  Message.GotDeleteMonitorDialogMessage({ message })
+
+const foldDeleteMonitorDialogOutMessage = Dialog.OutMessage.match<Update.Step<Model, Message>>({
+  Opened: () => (model) => ({ model }),
+  Closed: () => (model) => ({ model: evo(model, { maybeDeleteMonitor: () => Option.none() }) }),
+})
+
+const foldDeleteMonitorDialog = Update.foldChild({
+  update: Dialog.update,
+  read: readDeleteDialog,
+  write: writeDeleteDialog,
+  toParentMessage: toDeleteMonitorDialogMessage,
+  foldOutMessage: foldDeleteMonitorDialogOutMessage,
+})
+
+const foldOpenDeleteMonitorDialog = Update.foldChildStep({
+  update: Dialog.open,
+  read: readDeleteDialog,
+  write: writeDeleteDialog,
+  toParentMessage: toDeleteMonitorDialogMessage,
+  foldOutMessage: foldDeleteMonitorDialogOutMessage,
+})
+
+const foldCloseDeleteMonitorDialog = Update.foldChildStep({
+  update: Dialog.close,
+  read: readDeleteDialog,
+  write: writeDeleteDialog,
+  toParentMessage: toDeleteMonitorDialogMessage,
+  foldOutMessage: foldDeleteMonitorDialogOutMessage,
 })
 
 const readToast = (model: Model) => Option.some(model.toast)
@@ -352,6 +415,28 @@ const insertMonitor = (model: Model, monitor: Monitor): Model => {
   })
 }
 
+const replaceMonitor = (model: Model, monitor: Monitor): Model => {
+  if (!AsyncData.hasData(model.monitors)) {
+    return model
+  }
+
+  const existing = Option.getOrElse(AsyncData.getData(model.monitors), () => [])
+  const data = Array.map(existing, (current) => (current.id === monitor.id ? monitor : current))
+
+  return evo(model, { monitors: () => MonitorsAsyncData.Success({ data }) })
+}
+
+const removeMonitor = (model: Model, monitorId: MonitorId): Model => {
+  if (!AsyncData.hasData(model.monitors)) {
+    return model
+  }
+
+  const existing = Option.getOrElse(AsyncData.getData(model.monitors), () => [])
+  const data = Array.filter(existing, (current) => current.id !== monitorId)
+
+  return evo(model, { monitors: () => MonitorsAsyncData.Success({ data }) })
+}
+
 export const update = (model: Model, message: Message) =>
   Message.match<Update.Return<Model, Message, ApiClient>>(message, {
     CompletedListMonitors: ({ monitors }) => ({
@@ -372,6 +457,14 @@ export const update = (model: Model, message: Message) =>
     }),
 
     ClickedOpenAddMonitor: () => foldOpenAddMonitorDialog(resetForm(model)),
+
+    ClickedOpenEditMonitor: ({ monitor }) =>
+      foldOpenAddMonitorDialog(
+        evo(resetForm(model), {
+          form: () => formForMonitor(monitor),
+          editingMonitorId: () => Option.some(monitor.id),
+        }),
+      ),
 
     GotAddMonitorDialogMessage: ({ message: dialogMessage }) =>
       foldAddMonitorDialog(model, dialogMessage),
@@ -478,6 +571,28 @@ export const update = (model: Model, message: Message) =>
       }
     },
 
+    ClickedUpdateMonitor: () => {
+      if (Option.isNone(model.editingMonitorId)) {
+        return { model }
+      }
+
+      const validated = validateForm(model.form)
+      if (!validated.isValid) {
+        return { model: evo(model, { form: () => validated.form }) }
+      }
+
+      const definition = toMonitorDefinition(validated.form)
+      const closed = foldCloseAddMonitorDialog(model)
+
+      return {
+        model: closed.model,
+        commands: [
+          UpdateMonitor({ monitorId: model.editingMonitorId.value, definition }),
+          ...(closed.commands ?? []),
+        ],
+      }
+    },
+
     CompletedRegisterMonitor: ({ monitor }) =>
       foldShowToast(insertMonitor(model, monitor), {
         variant: 'Success',
@@ -485,6 +600,48 @@ export const update = (model: Model, message: Message) =>
       }),
 
     FailedRegisterMonitor: ({ error }) =>
+      foldShowToast(model, { variant: 'Error', payload: { message: error } }),
+
+    CompletedUpdateMonitor: ({ monitor }) =>
+      foldShowToast(replaceMonitor(model, monitor), {
+        variant: 'Success',
+        payload: { message: 'Monitor updated' },
+      }),
+
+    FailedUpdateMonitor: ({ error }) =>
+      foldShowToast(model, { variant: 'Error', payload: { message: error } }),
+
+    ClickedRequestDeleteMonitor: ({ monitor }) =>
+      foldOpenDeleteMonitorDialog(evo(model, { maybeDeleteMonitor: () => Option.some(monitor) })),
+
+    ClickedCancelDeleteMonitor: () => foldCloseDeleteMonitorDialog(model),
+
+    ClickedConfirmDeleteMonitor: () => {
+      if (Option.isNone(model.maybeDeleteMonitor)) {
+        return { model }
+      }
+
+      const closed = foldCloseDeleteMonitorDialog(model)
+
+      return {
+        model: closed.model,
+        commands: [
+          DeleteMonitor({ monitorId: model.maybeDeleteMonitor.value.id }),
+          ...(closed.commands ?? []),
+        ],
+      }
+    },
+
+    GotDeleteMonitorDialogMessage: ({ message: dialogMessage }) =>
+      foldDeleteMonitorDialog(model, dialogMessage),
+
+    CompletedDeleteMonitor: ({ monitorId }) =>
+      foldShowToast(removeMonitor(model, monitorId), {
+        variant: 'Success',
+        payload: { message: 'Monitor deleted' },
+      }),
+
+    FailedDeleteMonitor: ({ error }) =>
       foldShowToast(model, { variant: 'Error', payload: { message: error } }),
 
     ClickedOpenNotificationTargets: ({ monitorId, monitorName }) =>
@@ -509,6 +666,7 @@ const BUTTON_CLASS =
   'rounded-md px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500'
 const PRIMARY_BUTTON_CLASS = `${BUTTON_CLASS} bg-blue-600 text-white hover:bg-blue-700`
 const SECONDARY_BUTTON_CLASS = `${BUTTON_CLASS} border border-gray-300 bg-white text-gray-700 hover:bg-gray-50`
+const DANGER_BUTTON_CLASS = `${BUTTON_CLASS} border border-red-300 bg-white text-red-700 hover:bg-red-50`
 const CLOSE_BUTTON_CLASS = 'rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600'
 const DIALOG_CLASS = 'fixed inset-0 z-50 grid place-items-center p-4'
 const BACKDROP_CLASS = 'fixed inset-0 bg-black/40'
@@ -703,9 +861,14 @@ const addMonitorForm = (
   model: Model,
   closeButton: ReadonlyArray<ChildAttribute>,
   h: HtmlBuilder<Message>,
-): Html =>
-  h.form(
-    [h.Class('mt-4 space-y-4'), h.OnSubmit(Message.ClickedCreateMonitor())],
+): Html => {
+  const isEditing = Option.isSome(model.editingMonitorId)
+
+  return h.form(
+    [
+      h.Class('mt-4 space-y-4'),
+      h.OnSubmit(isEditing ? Message.ClickedUpdateMonitor() : Message.ClickedCreateMonitor()),
+    ],
     [
       fieldInput(
         'monitor-name',
@@ -784,7 +947,10 @@ const addMonitorForm = (
             {
               type: 'submit',
               toView: (attributes) =>
-                h.button([...attributes.button, h.Class(PRIMARY_BUTTON_CLASS)], ['Create monitor']),
+                h.button(
+                  [...attributes.button, h.Class(PRIMARY_BUTTON_CLASS)],
+                  [isEditing ? 'Save changes' : 'Create monitor'],
+                ),
             },
             h,
           ),
@@ -792,6 +958,7 @@ const addMonitorForm = (
       ),
     ],
   )
+}
 
 // NOTE: Foldkit 0.160.0 has no `isDismissible` flag on Dialog, so Escape and
 // backdrop dismissal are disabled by filtering those two attribute handlers out
@@ -802,8 +969,10 @@ const isEscapeToClose = (attribute: ChildAttribute): boolean =>
 const isBackdropToClose = (attribute: ChildAttribute): boolean =>
   Predicate.isTagged(attribute.attribute, 'OnClick')
 
-const addMonitorDialog = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.submodel({
+const addMonitorDialog = (model: Model, h: HtmlBuilder<Message>): Html => {
+  const isEditing = Option.isSome(model.editingMonitorId)
+
+  return h.submodel({
     slotId: model.dialog.id,
     model: model.dialog,
     view: Dialog.view,
@@ -829,7 +998,10 @@ const addMonitorDialog = (model: Model, h: HtmlBuilder<Message>): Html =>
                 h.div(
                   [h.Class('flex items-start justify-between gap-4')],
                   [
-                    h.h2([...title, h.Class('text-lg font-semibold')], ['Add monitor']),
+                    h.h2(
+                      [...title, h.Class('text-lg font-semibold')],
+                      [isEditing ? 'Edit monitor' : 'Add monitor'],
+                    ),
                     h.button(
                       [...closeButton, h.Class(CLOSE_BUTTON_CLASS), h.AriaLabel('Close')],
                       ['×'],
@@ -849,6 +1021,82 @@ const addMonitorDialog = (model: Model, h: HtmlBuilder<Message>): Html =>
     },
     toParentMessage: (message) => Message.GotAddMonitorDialogMessage({ message }),
   })
+}
+
+const deleteMonitorDialog = (model: Model, h: HtmlBuilder<Message>): Html => {
+  const monitorName = Option.match(model.maybeDeleteMonitor, {
+    onNone: () => 'this monitor',
+    onSome: (monitor) => monitor.name,
+  })
+
+  return h.submodel({
+    slotId: model.deleteDialog.id,
+    model: model.deleteDialog,
+    view: Dialog.view,
+    viewInputs: {
+      hasDescription: true,
+      toView: ({ dialog, backdrop, panel, title, description, closeButton, isVisible }) => {
+        if (!isVisible) {
+          return h.dialog([...dialog])
+        }
+
+        return h.dialog(
+          [...dialog, h.Class(DIALOG_CLASS)],
+          [
+            h.div([...backdrop, h.Class(BACKDROP_CLASS)]),
+            h.div(
+              [...panel, h.Class(PANEL_CLASS)],
+              [
+                h.div(
+                  [h.Class('flex items-start justify-between gap-4')],
+                  [
+                    h.h2([...title, h.Class('text-lg font-semibold')], ['Delete monitor']),
+                    h.button(
+                      [...closeButton, h.Class(CLOSE_BUTTON_CLASS), h.AriaLabel('Close')],
+                      ['×'],
+                    ),
+                  ],
+                ),
+                h.p(
+                  [...description, h.Class('mt-1 text-sm text-gray-500')],
+                  [`Delete ${monitorName}? Its notification targets will also be removed.`],
+                ),
+                h.div(
+                  [h.Class('mt-4 flex justify-end gap-2')],
+                  [
+                    Button.view(
+                      {
+                        onClick: Message.ClickedCancelDeleteMonitor(),
+                        toView: (attributes) =>
+                          h.button(
+                            [...attributes.button, h.Class(SECONDARY_BUTTON_CLASS)],
+                            ['Cancel'],
+                          ),
+                      },
+                      h,
+                    ),
+                    Button.view(
+                      {
+                        onClick: Message.ClickedConfirmDeleteMonitor(),
+                        toView: (attributes) =>
+                          h.button(
+                            [...attributes.button, h.Class(DANGER_BUTTON_CLASS)],
+                            ['Delete'],
+                          ),
+                      },
+                      h,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        )
+      },
+    },
+    toParentMessage: (message) => Message.GotDeleteMonitorDialogMessage({ message }),
+  })
+}
 
 const notificationTargetsView = (model: Model, h: HtmlBuilder<Message>): Html =>
   h.submodel({
@@ -902,7 +1150,7 @@ const monitorRow = (monitor: Monitor, h: HtmlBuilder<Message>): Html =>
         ],
       ),
       h.div(
-        [h.Class('mt-3')],
+        [h.Class('mt-3 flex flex-wrap gap-2')],
         [
           Button.view(
             {
@@ -915,6 +1163,22 @@ const monitorRow = (monitor: Monitor, h: HtmlBuilder<Message>): Html =>
                   [...attributes.button, h.Class(SECONDARY_BUTTON_CLASS)],
                   ['Notification targets'],
                 ),
+            },
+            h,
+          ),
+          Button.view(
+            {
+              onClick: Message.ClickedOpenEditMonitor({ monitor }),
+              toView: (attributes) =>
+                h.button([...attributes.button, h.Class(SECONDARY_BUTTON_CLASS)], ['Edit']),
+            },
+            h,
+          ),
+          Button.view(
+            {
+              onClick: Message.ClickedRequestDeleteMonitor({ monitor }),
+              toView: (attributes) =>
+                h.button([...attributes.button, h.Class(DANGER_BUTTON_CLASS)], ['Delete']),
             },
             h,
           ),
@@ -1013,6 +1277,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       ),
       h.main([h.Class('mx-auto max-w-3xl px-4 py-8')], [monitorsSection(model, h)]),
       addMonitorDialog(model, h),
+      deleteMonitorDialog(model, h),
       notificationTargetsView(model, h),
       toastView(model, h),
     ],

@@ -6,7 +6,7 @@ import {
   MattermostUserId,
   MattermostUserSearchDefinition,
 } from './Mattermost'
-import { Monitor, MonitorId } from './Monitor'
+import { Monitor, MonitorDefinition, MonitorId } from './Monitor'
 import { NotificationTarget, NotificationTargetDefinition } from './NotificationTarget'
 
 export class MonitorNotFound extends Schema.TaggedError<MonitorNotFound>()(
@@ -54,6 +54,12 @@ export const Api = HttpApi.make('UptimeWatchdog')
       }),
       HttpApiEndpoint.get('list', '/monitor', {
         success: Schema.Array(Monitor.json),
+      }),
+      HttpApiEndpoint.put('updateMonitor', '/monitor/:monitorId', {
+        params: { monitorId: MonitorId },
+        payload: MonitorDefinition,
+        success: Monitor.json,
+        error: MonitorNotFound,
       }),
       HttpApiEndpoint.delete('deleteMonitor', '/monitor/:monitorId', {
         params: { monitorId: MonitorId },

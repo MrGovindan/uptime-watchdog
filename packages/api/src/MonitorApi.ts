@@ -41,6 +41,19 @@ export const MonitorGroupLive = HttpApiBuilder.group(Api, 'monitor', (handlers) 
       .handle('list', () => repository.list)
 
       .handle(
+        'updateMonitor',
+        Effect.fn(function* ({ params, payload }) {
+          const updated = yield* repository.update(params.monitorId, payload)
+
+          return yield* Option.match(updated, {
+            onNone: () => Effect.fail(new MonitorNotFound({ monitorId: params.monitorId })),
+            onSome: (monitor) =>
+              events.publish({ _tag: 'MonitorUpdated', monitor }).pipe(Effect.as(monitor)),
+          })
+        }),
+      )
+
+      .handle(
         'deleteMonitor',
         Effect.fn(function* ({ params }) {
           const monitor = yield* ensureMonitor(repository, params.monitorId)

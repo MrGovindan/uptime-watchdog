@@ -1,4 +1,4 @@
-import { MonitorDefinition } from '@uptime-watchdog/common'
+import { MonitorDefinition, MonitorId } from '@uptime-watchdog/common'
 import { Effect } from 'effect'
 import { Command } from 'foldkit'
 
@@ -32,6 +32,39 @@ export const RegisterMonitor = Command.define('RegisterMonitor', {
     }).pipe(
       Effect.catch((error) =>
         Effect.succeed(Message.FailedRegisterMonitor({ error: describeError(error) })),
+      ),
+    ),
+})
+
+export const UpdateMonitor = Command.define('UpdateMonitor', {
+  args: { monitorId: MonitorId, definition: MonitorDefinition },
+  messages: [Message.CompletedUpdateMonitor, Message.FailedUpdateMonitor],
+  execute: ({ monitorId, definition }) =>
+    Effect.gen(function* () {
+      const client = yield* ApiClient
+      const monitor = yield* client.monitor.updateMonitor({
+        params: { monitorId },
+        payload: definition,
+      })
+      return Message.CompletedUpdateMonitor({ monitor })
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.succeed(Message.FailedUpdateMonitor({ error: describeError(error) })),
+      ),
+    ),
+})
+
+export const DeleteMonitor = Command.define('DeleteMonitor', {
+  args: { monitorId: MonitorId },
+  messages: [Message.CompletedDeleteMonitor, Message.FailedDeleteMonitor],
+  execute: ({ monitorId }) =>
+    Effect.gen(function* () {
+      const client = yield* ApiClient
+      yield* client.monitor.deleteMonitor({ params: { monitorId } })
+      return Message.CompletedDeleteMonitor({ monitorId })
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.succeed(Message.FailedDeleteMonitor({ error: describeError(error) })),
       ),
     ),
 })

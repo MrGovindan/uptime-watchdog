@@ -1,15 +1,19 @@
 import { NotValidated } from 'foldkit/fieldValidation'
 import { expect, given, role, scene, submit, text } from 'foldkit/scene'
+import { Option } from 'effect'
 import { evo } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
 import {
   modelReadyToCreate,
+  modelReadyToEdit,
   modelWithEmptyList,
   modelWithMonitors,
   modelWithOpenDialog,
+  monitor,
 } from './fixtures'
-import { update, view } from './main'
+import { Dialog } from '@foldkit/ui'
+import { makeInitialModel, update, view } from './main'
 
 describe('view', () => {
   test('shows the empty state when there are no monitors', () => {
@@ -66,6 +70,38 @@ describe('view', () => {
       expect(text('Name is required')).toExist(),
       expect(text('Hostname is required')).toExist(),
       expect(text('Enter a valid cron expression')).toExist(),
+    )
+  })
+
+  test('offers edit and delete actions for each monitor', () => {
+    scene(
+      { update, view },
+      given(modelWithMonitors),
+      expect(text('Edit')).toExist(),
+      expect(text('Delete')).toExist(),
+    )
+  })
+
+  test('titles the dialog and submit button for editing', () => {
+    scene(
+      { update, view },
+      given(modelReadyToEdit),
+      expect(text('Edit monitor')).toExist(),
+      expect(text('Save changes')).toExist(),
+    )
+  })
+
+  test('the delete confirmation dialog names the monitor', () => {
+    const confirming = evo(makeInitialModel(), {
+      maybeDeleteMonitor: () => Option.some(monitor),
+      deleteDialog: () => Dialog.init({ id: 'delete-monitor-dialog', isOpen: true }),
+    })
+
+    scene(
+      { update, view },
+      given(confirming),
+      expect(text('Delete monitor')).toExist(),
+      expect(text('Delete Prod API? Its notification targets will also be removed.')).toExist(),
     )
   })
 })

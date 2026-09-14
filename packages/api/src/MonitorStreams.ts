@@ -47,6 +47,7 @@ const make = Effect.gen(function* () {
     Stream.runForEach((event) =>
       WatchdogEvent.match(event, {
         MonitorRegistered: ({ monitor }) => start(monitor),
+        MonitorUpdated: ({ monitor }) => start(monitor),
         MonitorDeleted: ({ monitor }) => registry.remove(monitor.id),
         NotificationTargetAdded: () => Effect.void,
         NotificationTargetRemoved: () => Effect.void,

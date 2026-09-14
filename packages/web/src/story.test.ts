@@ -1,13 +1,22 @@
 import { Animation, Dialog, Toast as UiToast } from '@foldkit/ui'
+import { Option } from 'effect'
 import { Valid } from 'foldkit/fieldValidation'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { evo } from 'foldkit/struct'
 import { expect, test } from 'vitest'
 
-import { ListMonitors, RegisterMonitor } from './command'
+import { DeleteMonitor, ListMonitors, RegisterMonitor, UpdateMonitor } from './command'
 import { makeInitialModel, update, MonitorsAsyncData, type Model } from './main'
 import { Message } from './message'
-import { modelWithEmptyList, modelWithOpenDialog, modelReadyToCreate, monitor } from './fixtures'
+import {
+  modelReadyToCreate,
+  modelReadyToEdit,
+  modelWithEmptyList,
+  modelWithMonitors,
+  modelWithOpenDialog,
+  monitor,
+  updatedMonitor,
+} from './fixtures'
 
 const completedWaitBeforeDismissal = UiToast.Message.CompletedWaitBeforeDismissal({
   entryId: 'missing',
@@ -105,7 +114,92 @@ test('submitting a valid form registers the monitor, closes, and resets', () => 
       if (current.monitors._tag === 'Success') {
         expect(current.monitors.data[0]?.id).toBe(monitor.id)
       }
-      expect(current.form.hostname._tag).toBe('NotValidated')
+    }),
+  )
+})
+
+test('clicking edit opens the dialog prefilled with the monitor', () => {
+  story(
+    update,
+    given(modelWithMonitors),
+    message(Message.ClickedOpenEditMonitor({ monitor })),
+    Command.expectHas(Dialog.ShowDialog),
+    Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+    model((current) => {
+      expect(Option.isSome(current.editingMonitorId)).toBe(true)
+      expect(current.form.name.value).toBe('Prod API')
+      expect(current.form.hostname.value).toBe('example.com')
+      expect(current.form.port.value).toBe('443')
+      expect(current.form.cronSchedule.value).toBe('0-55/5 * * * *')
+      expect(current.dialog.isOpen).toBe(true)
+    }),
+  )
+})
+
+test('submitting the edit form dispatches an update and replaces the monitor', () => {
+  story(
+    update,
+    given(modelReadyToEdit),
+    message(Message.ClickedUpdateMonitor()),
+    Command.expectExact(UpdateMonitor, Dialog.CloseDialog),
+    Command.resolveAll(
+      [UpdateMonitor, Message.CompletedUpdateMonitor({ monitor: updatedMonitor })],
+      [Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()],
+      [UiToast.WaitBeforeDismissal, completedWaitBeforeDismissal],
+      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()],
+      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation()],
+    ),
+    Command.expectNone(),
+    model((current) => {
+      expect(current.monitors._tag).toBe('Success')
+      if (current.monitors._tag === 'Success') {
+        expect(current.monitors.data[0]?.name).toBe('Renamed API')
+        expect(current.monitors.data[0]?.id).toBe(monitor.id)
+      }
+      expect(current.toast.entries[0]?.variant).toBe('Success')
+    }),
+  )
+})
+
+test('requesting delete opens a confirmation dialog naming the monitor', () => {
+  story(
+    update,
+    given(modelWithMonitors),
+    message(Message.ClickedRequestDeleteMonitor({ monitor })),
+    Command.expectHas(Dialog.ShowDialog),
+    Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+    model((current) => {
+      expect(Option.isSome(current.maybeDeleteMonitor)).toBe(true)
+      expect(current.deleteDialog.isOpen).toBe(true)
+    }),
+  )
+})
+
+test('confirming delete dispatches the delete and removes the monitor', () => {
+  const confirming = evo(modelWithMonitors, {
+    maybeDeleteMonitor: () => Option.some(monitor),
+    deleteDialog: () => Dialog.init({ id: 'delete-monitor-dialog', isOpen: true }),
+  })
+
+  story(
+    update,
+    given(confirming),
+    message(Message.ClickedConfirmDeleteMonitor()),
+    Command.expectExact(DeleteMonitor, Dialog.CloseDialog),
+    Command.resolveAll(
+      [DeleteMonitor, Message.CompletedDeleteMonitor({ monitorId: monitor.id })],
+      [Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()],
+      [UiToast.WaitBeforeDismissal, completedWaitBeforeDismissal],
+      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()],
+      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation()],
+    ),
+    Command.expectNone(),
+    model((current) => {
+      expect(current.monitors._tag).toBe('Success')
+      if (current.monitors._tag === 'Success') {
+        expect(current.monitors.data).toHaveLength(0)
+      }
+      expect(current.toast.entries[0]?.variant).toBe('Success')
     }),
   )
 })

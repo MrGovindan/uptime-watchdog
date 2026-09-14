@@ -205,6 +205,66 @@ describe('monitor registration', () => {
   )
 })
 
+describe('monitor update', () => {
+  const updatedJson = {
+    ...definitionJson,
+    name: 'Renamed API',
+    cronSchedule: '0 * * * *',
+  }
+  const updatedDefinition = Effect.runSync(
+    Schema.decodeUnknownEffect(MonitorDefinition)(updatedJson),
+  )
+
+  it.effect('replaces the definition, preserving the id and createdAt', () =>
+    Effect.gen(function* () {
+      const { monitor } = yield* openClient
+
+      const created = yield* monitor.register({ payload: definition })
+      const updated = yield* monitor.updateMonitor({
+        params: { monitorId: created.id },
+        payload: updatedDefinition,
+      })
+
+      expect(updated.id).toBe(created.id)
+      expect(updated.name).toBe('Renamed API')
+      expect(Cron.format(updated.cronSchedule)).toBe('0 * * * *')
+      expect(updated.createdAt).toEqual(created.createdAt)
+
+      const monitors = yield* monitor.list({})
+      expect(monitors).toEqual([updated])
+    }).pipe(Effect.provide(groupLayer())),
+  )
+
+  it.effect('rejects updating an unknown monitor with 404', () =>
+    withWebHandler(applicationLayer(), (handler) =>
+      Effect.gen(function* () {
+        const response = yield* request(handler, '/monitor/00000000-0000-4000-8000-000000000000', {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(definitionJson),
+        })
+
+        expect(response.status).toBe(404)
+      }),
+    ),
+  )
+
+  it.effect('rejects an invalid update with 400', () =>
+    withWebHandler(applicationLayer(), (handler) =>
+      Effect.gen(function* () {
+        const monitorId = yield* registerViaHttp(handler)
+        const response = yield* request(handler, `/monitor/${monitorId}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ...definitionJson, name: '' }),
+        })
+
+        expect(response.status).toBe(400)
+      }),
+    ),
+  )
+})
+
 describe('notification targets', () => {
   it.effect('adds a target, resolving the mattermost user on the server', () =>
     Effect.gen(function* () {

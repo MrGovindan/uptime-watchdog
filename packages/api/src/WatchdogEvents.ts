@@ -3,6 +3,7 @@ import { Context, Effect, Layer, PubSub, Schema, Stream } from 'effect'
 
 export const WatchdogEvent = Schema.TaggedUnion({
   MonitorRegistered: { monitor: Monitor },
+  MonitorUpdated: { monitor: Monitor },
   MonitorDeleted: { monitor: Monitor, targets: Schema.Array(NotificationTarget) },
   NotificationTargetAdded: { monitor: Monitor, target: NotificationTarget },
   NotificationTargetRemoved: { monitor: Monitor, target: NotificationTarget },

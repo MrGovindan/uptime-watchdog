@@ -6,6 +6,10 @@ export interface Interface {
   readonly register: (definition: MonitorDefinition) => Effect.Effect<Monitor>
   readonly list: Effect.Effect<ReadonlyArray<Monitor>>
   readonly find: (id: MonitorId) => Effect.Effect<Option.Option<Monitor>>
+  readonly update: (
+    id: MonitorId,
+    definition: MonitorDefinition,
+  ) => Effect.Effect<Option.Option<Monitor>>
   readonly delete: (id: MonitorId) => Effect.Effect<Option.Option<Monitor>>
 }
 
@@ -54,6 +58,28 @@ const make = Effect.gen(function* () {
         sql`SELECT id, name, request, cronSchedule, createdAt FROM monitor WHERE id = ${id} LIMIT 1`,
     })({ id }).pipe(Effect.orDie)
 
+  const update = (
+    id: MonitorId,
+    definition: MonitorDefinition,
+  ): Effect.Effect<Option.Option<Monitor>> =>
+    SqlSchema.findOneOption({
+      Request: Monitor.update,
+      Result: Monitor,
+      execute: ({ id, name, request, cronSchedule }) => sql`
+        UPDATE monitor
+        SET name = ${name}, request = ${request}, cronSchedule = ${cronSchedule}
+        WHERE id = ${id}
+        RETURNING id, name, request, cronSchedule, createdAt
+      `,
+    })(
+      Monitor.update.make({
+        id,
+        name: definition.name,
+        request: definition.request,
+        cronSchedule: definition.cronSchedule,
+      }),
+    ).pipe(Effect.orDie)
+
   const deleteMonitor = (id: MonitorId): Effect.Effect<Option.Option<Monitor>> =>
     SqlSchema.findOneOption({
       Request: Schema.Struct({ id: MonitorId }),
@@ -64,7 +90,7 @@ const make = Effect.gen(function* () {
       `,
     })({ id }).pipe(Effect.orDie)
 
-  return { register, list, find, delete: deleteMonitor }
+  return { register, list, find, update, delete: deleteMonitor }
 })
 
 export const layer = Layer.effect(MonitorRepository, make)

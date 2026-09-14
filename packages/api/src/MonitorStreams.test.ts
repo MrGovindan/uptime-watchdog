@@ -1,6 +1,17 @@
 import { MonitorDefinition } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
-import { Context, Duration, Effect, Fiber, Layer, Ref, Result, Schema, Stream } from 'effect'
+import {
+  Context,
+  Duration,
+  Effect,
+  Fiber,
+  Layer,
+  Option,
+  Ref,
+  Result,
+  Schema,
+  Stream,
+} from 'effect'
 import { TestClock } from 'effect/testing'
 import { HttpClient, HttpClientResponse } from 'effect/unstable/http'
 import * as CheckUptime from './CheckUptime'
@@ -12,6 +23,20 @@ import * as WatchdogEvents from './WatchdogEvents'
 const definition = Effect.runSync(
   Schema.decodeUnknownEffect(MonitorDefinition)({
     name: 'Prod API',
+    request: {
+      hostname: 'example.test',
+      port: 8080,
+      protocol: 'https',
+      method: 'GET',
+      headers: {},
+    },
+    cronSchedule: '* * * * *',
+  }),
+)
+
+const updatedDefinition = Effect.runSync(
+  Schema.decodeUnknownEffect(MonitorDefinition)({
+    name: 'Renamed API',
     request: {
       hostname: 'example.test',
       port: 8080,
@@ -73,6 +98,36 @@ describe('MonitorStreams', () => {
       expect(observed?.monitorId).toBe(created.id)
       expect(observed?.monitorName).toBe('Prod API')
       expect(Result.isSuccess(observed!.observation.response)).toBe(true)
+    }).pipe(Effect.provide(makeLayers(false))),
+  )
+
+  it.effect('restarts the stream when a monitor is updated', () =>
+    Effect.gen(function* () {
+      // Arrange
+      const streams = yield* MonitorStreams.MonitorStreams
+      const repository = yield* MonitorRepository.MonitorRepository
+      const events = yield* WatchdogEvents.WatchdogEvents
+
+      const collected = yield* streams.observations.pipe(
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild,
+      )
+      yield* Effect.yieldNow
+
+      const created = yield* repository.register(definition)
+      yield* events.publish({ _tag: 'MonitorRegistered', monitor: created })
+      yield* Effect.yieldNow
+
+      // Act
+      const renamed = yield* repository.update(created.id, updatedDefinition)
+      yield* events.publish({ _tag: 'MonitorUpdated', monitor: Option.getOrThrow(renamed) })
+
+      // Assert
+      const [first, second] = Array.from(yield* Fiber.join(collected))
+      expect(first?.monitorId).toBe(created.id)
+      expect(first?.monitorName).toBe('Prod API')
+      expect(second?.monitorName).toBe('Renamed API')
     }).pipe(Effect.provide(makeLayers(false))),
   )
 

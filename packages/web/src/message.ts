@@ -30,6 +30,18 @@ export const Message = defineMessageUnion({
   CompletedRegisterMonitor: { monitor: Monitor },
   FailedRegisterMonitor: { error: Schema.String },
 
+  ClickedOpenEditMonitor: { monitor: Monitor },
+  ClickedUpdateMonitor: {},
+  CompletedUpdateMonitor: { monitor: Monitor },
+  FailedUpdateMonitor: { error: Schema.String },
+
+  ClickedRequestDeleteMonitor: { monitor: Monitor },
+  ClickedCancelDeleteMonitor: {},
+  ClickedConfirmDeleteMonitor: {},
+  GotDeleteMonitorDialogMessage: { message: Dialog.Message },
+  CompletedDeleteMonitor: { monitorId: MonitorId },
+  FailedDeleteMonitor: { error: Schema.String },
+
   ClickedOpenNotificationTargets: { monitorId: MonitorId, monitorName: MonitorName },
   GotNotificationTargetsMessage: { message: NotificationTargets.Message },
 
