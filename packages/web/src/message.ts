@@ -1,8 +1,9 @@
-import { HttpMethod, Monitor, Protocol } from '@uptime-watchdog/common'
+import { HttpMethod, Monitor, MonitorId, MonitorName, Protocol } from '@uptime-watchdog/common'
 import { Dialog } from '@foldkit/ui'
 import { Schema } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
 
+import * as NotificationTargets from './notificationTargets'
 import { Toast } from './toast'
 
 export const Message = defineMessageUnion({
@@ -28,6 +29,9 @@ export const Message = defineMessageUnion({
 
   CompletedRegisterMonitor: { monitor: Monitor },
   FailedRegisterMonitor: { error: Schema.String },
+
+  ClickedOpenNotificationTargets: { monitorId: MonitorId, monitorName: MonitorName },
+  GotNotificationTargetsMessage: { message: NotificationTargets.Message },
 
   GotToastMessage: { message: Toast.Message },
 })

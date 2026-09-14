@@ -1,11 +1,12 @@
 import { Monitor, type MonitorDefinition, MonitorId } from '@uptime-watchdog/common'
-import { Context, Effect, Layer, Schema } from 'effect'
+import { Context, Effect, Layer, Option, Schema } from 'effect'
 import { SqlClient, SqlModel, SqlSchema } from 'effect/unstable/sql'
 import { MonitorEvents } from './MonitorEvents'
 
 export interface Interface {
   readonly register: (definition: MonitorDefinition) => Effect.Effect<Monitor>
   readonly list: Effect.Effect<ReadonlyArray<Monitor>>
+  readonly find: (id: MonitorId) => Effect.Effect<Option.Option<Monitor>>
 }
 
 export class MonitorRepository extends Context.Service<MonitorRepository, Interface>()(
@@ -48,7 +49,15 @@ const make = Effect.gen(function* () {
       sql`SELECT id, name, request, cronSchedule, createdAt FROM monitor ORDER BY createdAt DESC`,
   })({}).pipe(Effect.orDie)
 
-  return { register, list }
+  const find = (id: MonitorId): Effect.Effect<Option.Option<Monitor>> =>
+    SqlSchema.findOneOption({
+      Request: Schema.Struct({ id: MonitorId }),
+      Result: Monitor,
+      execute: ({ id }) =>
+        sql`SELECT id, name, request, cronSchedule, createdAt FROM monitor WHERE id = ${id} LIMIT 1`,
+    })({ id }).pipe(Effect.orDie)
+
+  return { register, list, find }
 })
 
 export const layer = Layer.effect(MonitorRepository, make)

@@ -30,10 +30,6 @@ const Cron = Schema.declare(EffectCron.isCron).pipe(
   }),
 )
 
-const CreatedAt = Schema.String.pipe(
-  Schema.withConstructorDefault(Effect.sync(() => new Date().toISOString())),
-)
-
 export class Monitor extends Model.Class<Monitor>('Monitor')({
   id: Model.GeneratedByApp(MonitorId),
   name: MonitorName,
@@ -46,11 +42,7 @@ export class Monitor extends Model.Class<Monitor>('Monitor')({
     jsonUpdate: UptimeRequest,
   }),
   cronSchedule: Cron,
-  createdAt: Model.Field({
-    select: Schema.String,
-    insert: CreatedAt,
-    json: Schema.String,
-  }),
+  createdAt: Model.DateTimeInsert,
 }) {}
 
 export const MonitorDefinition = Monitor.jsonCreate

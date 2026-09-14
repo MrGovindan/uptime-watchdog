@@ -8,7 +8,7 @@ import {
   Protocol,
 } from '@uptime-watchdog/common'
 import { Button, Dialog, Input, Select } from '@foldkit/ui'
-import { Array, Cron, Option, Predicate, Result, Schema } from 'effect'
+import { Array, Cron, DateTime, Option, Predicate, Result, Schema } from 'effect'
 import { AsyncData, FieldValidation, Runtime, Update } from 'foldkit'
 import {
   Field,
@@ -26,6 +26,7 @@ import { ApiClient } from './apiClient'
 import { ListMonitors, RegisterMonitor } from './command'
 import { describeCron } from './cronDescription'
 import { Message } from './message'
+import * as NotificationTargets from './notificationTargets'
 import { Toast } from './toast'
 
 const APP_NAME = 'Uptime Watchdog'
@@ -117,6 +118,7 @@ export const Model = Schema.Struct({
   monitors: MonitorsAsyncData.schema,
   form: Form,
   dialog: Dialog.Model,
+  notificationTargets: NotificationTargets.Model,
   toast: Toast.Model,
 })
 export type Model = typeof Model.Type
@@ -139,6 +141,7 @@ export const makeInitialModel = (): Model => ({
   monitors: MonitorsAsyncData.Loading(),
   form: makeInitialForm(),
   dialog: Dialog.init({ id: 'add-monitor-dialog' }),
+  notificationTargets: NotificationTargets.init().model,
   toast: Toast.init({ id: 'app-toast' }),
 })
 
@@ -296,6 +299,47 @@ const foldShowToast = Update.foldChild({
   foldOutMessage: foldToastOutMessage,
 })
 
+const readNotificationTargets = (model: Model) => Option.some(model.notificationTargets)
+const writeNotificationTargets = (
+  model: Model,
+  nextNotificationTargets: NotificationTargets.Model,
+): Model => evo(model, { notificationTargets: () => nextNotificationTargets })
+const toNotificationTargetsMessage = (message: NotificationTargets.Message): Message =>
+  Message.GotNotificationTargetsMessage({ message })
+
+const foldNotificationTargetsOutMessage = NotificationTargets.OutMessage.match<
+  Update.Step<Model, Message>
+>({
+  SentTestNotification: () => (stepModel) =>
+    foldShowToast(stepModel, {
+      variant: 'Success',
+      payload: { message: 'Test notification sent' },
+    }),
+  FailedTestNotification:
+    ({ message }) =>
+    (stepModel) =>
+      foldShowToast(stepModel, { variant: 'Error', payload: { message } }),
+})
+
+const foldNotificationTargets = Update.foldChild({
+  update: NotificationTargets.update,
+  read: readNotificationTargets,
+  write: writeNotificationTargets,
+  toParentMessage: toNotificationTargetsMessage,
+  foldOutMessage: foldNotificationTargetsOutMessage,
+})
+
+const foldOpenNotificationTargets = Update.foldChild({
+  update: (
+    notificationTargetsModel: NotificationTargets.Model,
+    input: NotificationTargets.OpenInput,
+  ) => NotificationTargets.open(notificationTargetsModel, input),
+  read: readNotificationTargets,
+  write: writeNotificationTargets,
+  toParentMessage: toNotificationTargetsMessage,
+  foldOutMessage: foldNotificationTargetsOutMessage,
+})
+
 const insertMonitor = (model: Model, monitor: Monitor): Model => {
   if (AsyncData.hasData(model.monitors)) {
     const existing = Option.getOrElse(AsyncData.getData(model.monitors), () => [])
@@ -442,6 +486,12 @@ export const update = (model: Model, message: Message) =>
 
     FailedRegisterMonitor: ({ error }) =>
       foldShowToast(model, { variant: 'Error', payload: { message: error } }),
+
+    ClickedOpenNotificationTargets: ({ monitorId, monitorName }) =>
+      foldOpenNotificationTargets({ monitorId, monitorName })(model),
+
+    GotNotificationTargetsMessage: ({ message: notificationTargetsMessage }) =>
+      foldNotificationTargets(model, notificationTargetsMessage),
 
     GotToastMessage: ({ message: toastMessage }) => foldToast(model, toastMessage),
   })
@@ -800,6 +850,14 @@ const addMonitorDialog = (model: Model, h: HtmlBuilder<Message>): Html =>
     toParentMessage: (message) => Message.GotAddMonitorDialogMessage({ message }),
   })
 
+const notificationTargetsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.submodel({
+    slotId: model.notificationTargets.dialog.id,
+    model: model.notificationTargets,
+    view: NotificationTargets.view,
+    toParentMessage: (message) => Message.GotNotificationTargetsMessage({ message }),
+  })
+
 const monitorUrl = (monitor: Monitor): string => {
   const path = monitor.request.path === undefined ? '' : monitor.request.path
   return `${monitor.request.protocol}://${monitor.request.hostname}:${monitor.request.port}${path}`
@@ -832,7 +890,34 @@ const monitorRow = (monitor: Monitor, h: HtmlBuilder<Message>): Html =>
           h.dt([], ['Schedule']),
           h.dd([], [describeCron(monitor.cronSchedule)]),
           h.dt([], ['Created']),
-          h.dd([], [new Date(monitor.createdAt).toLocaleString()]),
+          h.dd(
+            [],
+            [
+              DateTime.formatLocal(DateTime.makeUnsafe(monitor.createdAt), {
+                dateStyle: 'short',
+                timeStyle: 'short',
+              }),
+            ],
+          ),
+        ],
+      ),
+      h.div(
+        [h.Class('mt-3')],
+        [
+          Button.view(
+            {
+              onClick: Message.ClickedOpenNotificationTargets({
+                monitorId: monitor.id,
+                monitorName: monitor.name,
+              }),
+              toView: (attributes) =>
+                h.button(
+                  [...attributes.button, h.Class(SECONDARY_BUTTON_CLASS)],
+                  ['Notification targets'],
+                ),
+            },
+            h,
+          ),
         ],
       ),
     ],
@@ -928,6 +1013,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       ),
       h.main([h.Class('mx-auto max-w-3xl px-4 py-8')], [monitorsSection(model, h)]),
       addMonitorDialog(model, h),
+      notificationTargetsView(model, h),
       toastView(model, h),
     ],
   ),

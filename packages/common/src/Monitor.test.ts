@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@effect/vitest'
-import { Cron, Effect, Schema } from 'effect'
+import { Cron, DateTime, Effect, Option, Schema } from 'effect'
 
 import { Monitor, MonitorDefinition, MonitorId, MonitorName } from './Monitor'
 
@@ -123,7 +123,7 @@ describe('Monitor', () => {
     Effect.gen(function* () {
       const insert = makeInsert(yield* makeDefinition())
 
-      expect(Number.isNaN(Date.parse(insert.createdAt))).toBe(false)
+      expect(Option.isSome(DateTime.make(insert.createdAt))).toBe(true)
     }),
   )
 

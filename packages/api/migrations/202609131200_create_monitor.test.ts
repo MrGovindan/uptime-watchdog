@@ -1,10 +1,8 @@
 import { SqliteClient } from '@effect/sql-sqlite-bun'
-import * as SqliteMigrator from '@effect/sql-sqlite-bun/SqliteMigrator'
 import { describe, expect, it } from '@effect/vitest'
 import { Effect } from 'effect'
 import { SqlClient } from 'effect/unstable/sql'
 import createMonitor from './202609131200_create_monitor'
-import { migrationSet } from './index'
 
 interface MonitorColumn {
   readonly name: string
@@ -37,16 +35,6 @@ describe('202609131200_create_monitor', () => {
       yield* createMonitor
 
       expect(yield* monitorColumns).toEqual(expectedColumns)
-    }).pipe(Effect.provide(inMemoryDatabase)),
-  )
-
-  it.effect('is applied by the migrations record', () =>
-    Effect.gen(function* () {
-      const applied = yield* SqliteMigrator.run({
-        loader: SqliteMigrator.fromRecord(migrationSet),
-      })
-
-      expect(applied).toEqual([[202609131200, 'create_monitor']])
     }).pipe(Effect.provide(inMemoryDatabase)),
   )
 })

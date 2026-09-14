@@ -4,18 +4,24 @@ import { HttpRouter, HttpStaticServer } from 'effect/unstable/http'
 import * as CheckUptime from './CheckUptime'
 import * as AppConfig from './Config'
 import * as Database from './Database'
+import * as Mattermost from './Mattermost'
 import * as MonitorApi from './MonitorApi'
 import * as MonitorEvents from './MonitorEvents'
 import * as MonitorRepository from './MonitorRepository'
 import * as MonitorStreams from './MonitorStreams'
+import * as NotificationTargetRepository from './NotificationTargetRepository'
 
 const application = Layer.unwrap(
   Effect.gen(function* () {
     const { port, staticRoot, databasePath } = yield* AppConfig.server
+    const mattermostConfig = yield* AppConfig.mattermost
 
     const database = Database.layer(databasePath)
     const events = MonitorEvents.layer
     const repository = MonitorRepository.layer.pipe(Layer.provide(events), Layer.provide(database))
+    const targets = NotificationTargetRepository.layer.pipe(Layer.provide(database))
+    const mattermost = Mattermost.layer(mattermostConfig)
+
     const streams = MonitorStreams.layer.pipe(
       Layer.provide(events),
       Layer.provide(repository),
@@ -23,7 +29,11 @@ const application = Layer.unwrap(
       Layer.provide(BunHttpClient.layer),
     )
 
-    const api = MonitorApi.layer.pipe(Layer.provide(repository), Layer.provide(database))
+    const api = MonitorApi.layer.pipe(
+      Layer.provide(repository),
+      Layer.provide(targets),
+      Layer.provide(mattermost),
+    )
     const webApp = HttpStaticServer.layer({ root: staticRoot, spa: true })
     const served = HttpRouter.serve(Layer.mergeAll(webApp, api)).pipe(
       Layer.provide(BunHttpServer.layer({ port })),

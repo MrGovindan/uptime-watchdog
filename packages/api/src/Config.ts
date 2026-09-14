@@ -8,10 +8,20 @@ export const port = Config.Port('PORT').pipe(Config.withDefault(3000))
 
 export const databasePath = Config.String('DATABASE_PATH')
 
+export const mattermostBaseUrl = Config.URL('MATTERMOST_BASE_URL')
+
+export const mattermostApiToken = Config.Redacted('MATTERMOST_API_TOKEN')
+
 export const server = Config.all({
   staticRoot,
   port,
   databasePath,
 })
 
+export const mattermost = Config.all({
+  baseUrl: mattermostBaseUrl,
+  apiToken: mattermostApiToken,
+})
+
 export type Server = Config.Success<typeof server>
+export type Mattermost = Config.Success<typeof mattermost>

@@ -1,42 +1,137 @@
 import { BunHttpServer } from '@effect/platform-bun'
-import { Api, MonitorDefinition } from '@uptime-watchdog/common'
+import {
+  Api,
+  type MattermostUser,
+  MattermostUnavailable,
+  MattermostUserNotFound,
+  MonitorDefinition,
+} from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
-import { Cron, Effect, Layer, Schema } from 'effect'
+import { Cron, Effect, Layer, Ref, Schema } from 'effect'
 import { HttpRouter } from 'effect/unstable/http'
 import { HttpApiTest } from 'effect/unstable/httpapi'
 import * as Database from './Database'
+import { Mattermost } from './Mattermost'
+import type { Interface as MattermostInterface } from './Mattermost'
 import * as MonitorApi from './MonitorApi'
 import * as MonitorEvents from './MonitorEvents'
 import { layer as monitorRepositoryLayer } from './MonitorRepository'
+import { layer as notificationTargetRepositoryLayer } from './NotificationTargetRepository'
 
 const dependencies = Layer.provideMerge(BunHttpServer.layerHttpServices)
 
-const repositoryLayer = () =>
-  monitorRepositoryLayer.pipe(
-    Layer.provide(MonitorEvents.layer),
-    Layer.provide(Database.layer(':memory:')),
+const mattermostUser: MattermostUser = {
+  id: 'mm-jesse',
+  username: 'jesse',
+  displayName: 'Jesse Duffield',
+}
+
+const botUser: MattermostUser = {
+  id: 'mm-bot',
+  username: 'watchdog',
+  displayName: 'Watchdog',
+}
+
+const mattermostStub = (overrides: Partial<MattermostInterface> = {}): Layer.Layer<Mattermost> => {
+  const users = new Map([[mattermostUser.id, mattermostUser]])
+
+  const base: MattermostInterface = {
+    searchUsers: () => Effect.succeed([mattermostUser]),
+    getUser: (userId) => {
+      const user = users.get(userId)
+      return user === undefined
+        ? Effect.fail(new MattermostUserNotFound({ mattermostUserId: userId }))
+        : Effect.succeed(user)
+    },
+    sendDirectMessage: (userId) =>
+      users.has(userId)
+        ? Effect.void
+        : Effect.fail(new MattermostUserNotFound({ mattermostUserId: userId })),
+  }
+
+  return Layer.succeed(Mattermost, { ...base, ...overrides })
+}
+
+const shareDependencies = () => {
+  const database = Database.layer(':memory:')
+  const events = MonitorEvents.layer
+
+  return {
+    monitors: monitorRepositoryLayer.pipe(Layer.provide(events), Layer.provide(database)),
+    targets: notificationTargetRepositoryLayer.pipe(Layer.provide(database)),
+  }
+}
+
+const groupLayer = (overrides: Partial<MattermostInterface> = {}) => {
+  const { monitors, targets } = shareDependencies()
+
+  return Layer.mergeAll(MonitorApi.MonitorGroupLive, MonitorApi.NotificationGroupLive).pipe(
+    Layer.provide(monitors),
+    Layer.provide(targets),
+    Layer.provide(mattermostStub(overrides)),
+    dependencies,
+  )
+}
+
+const applicationLayer = (overrides: Partial<MattermostInterface> = {}) => {
+  const { monitors, targets } = shareDependencies()
+
+  return MonitorApi.layer.pipe(
+    Layer.provide(monitors),
+    Layer.provide(targets),
+    Layer.provide(mattermostStub(overrides)),
+    dependencies,
+  )
+}
+
+const openClient = HttpApiTest.groups(Api, ['monitor', 'notification'])
+
+const definitionJson = {
+  name: 'Prod API',
+  request: {
+    hostname: 'example.test',
+    port: 8080,
+    protocol: 'https',
+    method: 'GET',
+    headers: {},
+  },
+  cronSchedule: '*/5 * * * *',
+}
+
+const definition = Effect.runSync(Schema.decodeUnknownEffect(MonitorDefinition)(definitionJson))
+
+const request = (
+  handler: (request: Request) => Promise<Response>,
+  path: string,
+  init?: RequestInit,
+) => Effect.promise(() => handler(new Request(`http://localhost${path}`, init)))
+
+const json = (body: unknown): RequestInit => ({
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify(body),
+})
+
+type ApplicationLayer = ReturnType<typeof applicationLayer>
+
+const withWebHandler = (
+  layer: ApplicationLayer,
+  run: (handler: (request: Request) => Promise<Response>) => Effect.Effect<void>,
+) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => HttpRouter.toWebHandler(layer, { disableLogger: true })),
+    ({ handler }) => run(handler),
+    ({ dispose }) => Effect.promise(dispose),
   )
 
-const groupLayer = () =>
-  MonitorApi.MonitorGroupLive.pipe(Layer.provide(repositoryLayer()), dependencies)
+const registerViaHttp = (handler: (request: Request) => Promise<Response>): Effect.Effect<string> =>
+  Effect.gen(function* () {
+    const response = yield* request(handler, '/monitor', json(definitionJson))
+    expect(response.status).toBe(201)
 
-const applicationLayer = () => MonitorApi.layer.pipe(Layer.provide(repositoryLayer()), dependencies)
-
-const openClient = HttpApiTest.groups(Api, ['monitor'])
-
-const definition = Effect.runSync(
-  Schema.decodeUnknownEffect(MonitorDefinition)({
-    name: 'Prod API',
-    request: {
-      hostname: 'example.test',
-      port: 8080,
-      protocol: 'https',
-      method: 'GET',
-      headers: {},
-    },
-    cronSchedule: '*/5 * * * *',
-  }),
-)
+    const created = (yield* Effect.promise(() => response.json())) as { id: string }
+    return created.id
+  })
 
 describe('monitor registration', () => {
   it.effect('registers a monitor with a generated id and defaulted headers', () =>
@@ -66,61 +161,260 @@ describe('monitor registration', () => {
   )
 
   it.effect('rejects an invalid definition with 400', () =>
-    Effect.acquireUseRelease(
-      Effect.sync(() => HttpRouter.toWebHandler(applicationLayer(), { disableLogger: true })),
-      ({ handler }) =>
-        Effect.gen(function* () {
-          const response = yield* Effect.promise(() =>
-            handler(
-              new Request('http://localhost/monitor', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({
-                  request: { hostname: '', port: -1, protocol: 'ftp', method: 'NOPE' },
-                  cronSchedule: 'not a cron',
-                }),
-              }),
-            ),
-          )
+    withWebHandler(applicationLayer(), (handler) =>
+      Effect.gen(function* () {
+        const response = yield* request(
+          handler,
+          '/monitor',
+          json({
+            request: { hostname: '', port: -1, protocol: 'ftp', method: 'NOPE' },
+            cronSchedule: 'not a cron',
+          }),
+        )
 
-          expect(response.status).toBe(400)
-        }),
-      ({ dispose }) => Effect.promise(dispose),
+        expect(response.status).toBe(400)
+      }),
     ),
   )
 
   it.effect('rejects a definition with a missing or over-long name with 400', () =>
-    Effect.acquireUseRelease(
-      Effect.sync(() => HttpRouter.toWebHandler(applicationLayer(), { disableLogger: true })),
-      ({ handler }) =>
+    withWebHandler(applicationLayer(), (handler) =>
+      Effect.gen(function* () {
+        const bodies = [
+          {
+            request: { hostname: 'example.test', port: 8080, protocol: 'https', method: 'GET' },
+            cronSchedule: '*/5 * * * *',
+          },
+          {
+            name: 'x'.repeat(129),
+            request: { hostname: 'example.test', port: 8080, protocol: 'https', method: 'GET' },
+            cronSchedule: '*/5 * * * *',
+          },
+        ]
+
+        for (const body of bodies) {
+          const response = yield* request(handler, '/monitor', json(body))
+
+          expect(response.status).toBe(400)
+        }
+      }),
+    ),
+  )
+})
+
+describe('notification targets', () => {
+  it.effect('adds a target, resolving the mattermost user on the server', () =>
+    Effect.gen(function* () {
+      const { monitor } = yield* openClient
+
+      const created = yield* monitor.register({ payload: definition })
+      const target = yield* monitor.addNotificationTarget({
+        params: { monitorId: created.id },
+        payload: { mattermostUserId: mattermostUser.id },
+      })
+
+      expect(target).toMatchObject({
+        monitorId: created.id,
+        mattermostUserId: 'mm-jesse',
+        mattermostUsername: 'jesse',
+        mattermostDisplayName: 'Jesse Duffield',
+      })
+    }).pipe(Effect.provide(groupLayer())),
+  )
+
+  it.effect('lists the targets of a monitor', () =>
+    Effect.gen(function* () {
+      const { monitor } = yield* openClient
+
+      const created = yield* monitor.register({ payload: definition })
+      const target = yield* monitor.addNotificationTarget({
+        params: { monitorId: created.id },
+        payload: { mattermostUserId: mattermostUser.id },
+      })
+
+      const targets = yield* monitor.listNotificationTargets({ params: { monitorId: created.id } })
+
+      expect(targets).toEqual([target])
+    }).pipe(Effect.provide(groupLayer())),
+  )
+
+  it.effect('removes a target idempotently', () =>
+    Effect.gen(function* () {
+      const { monitor } = yield* openClient
+
+      const created = yield* monitor.register({ payload: definition })
+      yield* monitor.addNotificationTarget({
+        params: { monitorId: created.id },
+        payload: { mattermostUserId: mattermostUser.id },
+      })
+
+      yield* monitor.removeNotificationTarget({
+        params: { monitorId: created.id, mattermostUserId: mattermostUser.id },
+      })
+      yield* monitor.removeNotificationTarget({
+        params: { monitorId: created.id, mattermostUserId: mattermostUser.id },
+      })
+
+      const targets = yield* monitor.listNotificationTargets({ params: { monitorId: created.id } })
+
+      expect(targets).toEqual([])
+    }).pipe(Effect.provide(groupLayer())),
+  )
+
+  it.effect('rejects a duplicate target with 409', () =>
+    withWebHandler(applicationLayer(), (handler) =>
+      Effect.gen(function* () {
+        const monitorId = yield* registerViaHttp(handler)
+        const body = { mattermostUserId: mattermostUser.id }
+
+        yield* request(handler, `/monitor/${monitorId}/notification-target`, json(body))
+        const response = yield* request(
+          handler,
+          `/monitor/${monitorId}/notification-target`,
+          json(body),
+        )
+
+        expect(response.status).toBe(409)
+      }),
+    ),
+  )
+
+  it.effect('rejects an unknown monitor with 404', () =>
+    withWebHandler(applicationLayer(), (handler) =>
+      Effect.gen(function* () {
+        const unknown = '00000000-0000-4000-8000-000000000000'
+
+        const listResponse = yield* request(handler, `/monitor/${unknown}/notification-target`)
+        const addResponse = yield* request(
+          handler,
+          `/monitor/${unknown}/notification-target`,
+          json({ mattermostUserId: mattermostUser.id }),
+        )
+
+        expect(listResponse.status).toBe(404)
+        expect(addResponse.status).toBe(404)
+      }),
+    ),
+  )
+
+  it.effect('reports 502 when mattermost rejects the request', () =>
+    withWebHandler(
+      applicationLayer({
+        getUser: () => Effect.fail(new MattermostUnavailable({ message: 'down' })),
+      }),
+      (handler) =>
         Effect.gen(function* () {
-          const bodies = [
-            {
-              request: { hostname: 'example.test', port: 8080, protocol: 'https', method: 'GET' },
-              cronSchedule: '*/5 * * * *',
-            },
-            {
-              name: 'x'.repeat(129),
-              request: { hostname: 'example.test', port: 8080, protocol: 'https', method: 'GET' },
-              cronSchedule: '*/5 * * * *',
-            },
-          ]
+          const monitorId = yield* registerViaHttp(handler)
+          const response = yield* request(
+            handler,
+            `/monitor/${monitorId}/notification-target`,
+            json({ mattermostUserId: mattermostUser.id }),
+          )
 
-          for (const body of bodies) {
-            const response = yield* Effect.promise(() =>
-              handler(
-                new Request('http://localhost/monitor', {
-                  method: 'POST',
-                  headers: { 'content-type': 'application/json' },
-                  body: JSON.stringify(body),
-                }),
-              ),
-            )
-
-            expect(response.status).toBe(400)
-          }
+          expect(response.status).toBe(502)
         }),
-      ({ dispose }) => Effect.promise(dispose),
+    ),
+  )
+
+  it.effect('reports 404 when the mattermost user does not exist', () =>
+    withWebHandler(applicationLayer(), (handler) =>
+      Effect.gen(function* () {
+        const monitorId = yield* registerViaHttp(handler)
+        const response = yield* request(
+          handler,
+          `/monitor/${monitorId}/notification-target`,
+          json({ mattermostUserId: 'mm-missing' }),
+        )
+
+        expect(response.status).toBe(404)
+      }),
+    ),
+  )
+})
+
+describe('mattermost notification endpoints', () => {
+  it.effect('searches mattermost users', () =>
+    Effect.gen(function* () {
+      const { notification } = yield* openClient
+
+      const users = yield* notification.searchMattermostUsers({ payload: { term: 'jes' } })
+
+      expect(users).toEqual([mattermostUser])
+    }).pipe(Effect.provide(groupLayer())),
+  )
+
+  it.effect('rejects a blank search term with 400', () =>
+    withWebHandler(applicationLayer(), (handler) =>
+      Effect.gen(function* () {
+        const response = yield* request(
+          handler,
+          '/notification/mattermost/user/search',
+          json({ term: '   ' }),
+        )
+
+        expect(response.status).toBe(400)
+      }),
+    ),
+  )
+
+  it.effect('sends a test direct message including the monitor name', () => {
+    const sent = Effect.runSync(
+      Ref.make<ReadonlyArray<Readonly<{ userId: string; message: string }>>>([]),
+    )
+
+    return Effect.gen(function* () {
+      const { monitor, notification } = yield* openClient
+
+      const created = yield* monitor.register({ payload: definition })
+      yield* notification.sendMattermostTest({
+        payload: { mattermostUserId: botUser.id, monitorId: created.id },
+      })
+
+      const messages = yield* Ref.get(sent)
+      expect(messages).toEqual([
+        {
+          userId: botUser.id,
+          message: 'This is a test notification from Uptime Watchdog for monitor "Prod API".',
+        },
+      ])
+    }).pipe(
+      Effect.provide(
+        groupLayer({
+          getUser: () => Effect.succeed(botUser),
+          sendDirectMessage: (userId, message) =>
+            Ref.update(sent, (entries) => [...entries, { userId, message }]),
+        }),
+      ),
+    )
+  })
+
+  it.effect('surfaces a mattermost user that does not exist', () =>
+    Effect.gen(function* () {
+      const { notification } = yield* openClient
+
+      const error = yield* notification
+        .sendMattermostTest({ payload: { mattermostUserId: 'mm-missing' } })
+        .pipe(Effect.flip)
+
+      expect(error).toMatchObject({ _tag: 'MattermostUserNotFound' })
+    }).pipe(Effect.provide(groupLayer())),
+  )
+
+  it.effect('surfaces mattermost being unavailable', () =>
+    Effect.gen(function* () {
+      const { notification } = yield* openClient
+
+      const error = yield* notification
+        .searchMattermostUsers({ payload: { term: 'jes' } })
+        .pipe(Effect.flip)
+
+      expect(error).toMatchObject({ _tag: 'MattermostUnavailable' })
+    }).pipe(
+      Effect.provide(
+        groupLayer({
+          searchUsers: () => Effect.fail(new MattermostUnavailable({ message: 'down' })),
+        }),
+      ),
     ),
   )
 })
