@@ -842,7 +842,13 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
           h.div(
             [h.Class('mx-auto flex max-w-3xl items-center justify-between px-4 py-4')],
             [
-              h.h1([h.Class('text-lg font-semibold')], [APP_NAME]),
+              h.div(
+                [h.Class('flex items-center gap-2')],
+                [
+                  h.img([h.Src('/icon-192.png'), h.Alt(''), h.Class('h-12 w-12')]),
+                  h.h1([h.Class('text-lg font-semibold')], [APP_NAME]),
+                ],
+              ),
               Button.view(
                 {
                   onClick: Message.ClickedOpenAddMonitor(),
