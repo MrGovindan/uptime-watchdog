@@ -1,7 +1,6 @@
 import { Monitor, type MonitorDefinition, MonitorId } from '@uptime-watchdog/common'
 import { Context, Effect, Layer, Option, Schema } from 'effect'
 import { SqlClient, SqlModel, SqlSchema } from 'effect/unstable/sql'
-import { WatchdogEvents } from './WatchdogEvents'
 
 export interface Interface {
   readonly register: (definition: MonitorDefinition) => Effect.Effect<Monitor>
@@ -16,7 +15,6 @@ export class MonitorRepository extends Context.Service<MonitorRepository, Interf
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
-  const events = yield* WatchdogEvents
 
   const model = yield* SqlModel.makeRepository(Monitor, {
     tableName: 'monitor',
@@ -37,8 +35,6 @@ const make = Effect.gen(function* () {
         }),
       )
       .pipe(Effect.orDie)
-
-    yield* events.publish({ _tag: 'MonitorRegistered', monitor })
 
     return monitor
   })

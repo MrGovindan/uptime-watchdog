@@ -29,62 +29,55 @@ export const MonitorGroupLive = HttpApiBuilder.group(Api, 'monitor', (handlers) 
     const events = yield* WatchdogEvents
 
     return handlers
-      .handle('register', ({ payload }) => repository.register(payload))
-      .handle('list', () => repository.list)
-      .handle('deleteMonitor', ({ params }) =>
-        ensureMonitor(repository, params.monitorId).pipe(
-          Effect.flatMap((monitor) =>
-            targets
-              .list(params.monitorId)
-              .pipe(
-                Effect.flatMap((snapshot) =>
-                  repository
-                    .delete(params.monitorId)
-                    .pipe(
-                      Effect.flatMap(() =>
-                        events.publish({ _tag: 'MonitorDeleted', monitor, targets: snapshot }),
-                      ),
-                    ),
-                ),
-              ),
-          ),
-        ),
+      .handle(
+        'register',
+        Effect.fn(function* ({ payload }) {
+          const monitor = yield* repository.register(payload)
+          yield* events.publish({ _tag: 'MonitorRegistered', monitor })
+          return monitor
+        }),
       )
+
+      .handle('list', () => repository.list)
+
+      .handle(
+        'deleteMonitor',
+        Effect.fn(function* ({ params }) {
+          const monitor = yield* ensureMonitor(repository, params.monitorId)
+          const notificationTargets = yield* targets.list(monitor.id)
+          yield* repository.delete(monitor.id)
+          yield* events.publish({ _tag: 'MonitorDeleted', monitor, targets: notificationTargets })
+        }),
+      )
+
       .handle('listNotificationTargets', ({ params }) =>
         ensureMonitor(repository, params.monitorId).pipe(
           Effect.flatMap(() => targets.list(params.monitorId)),
         ),
       )
-      .handle('addNotificationTarget', ({ params, payload }) =>
-        ensureMonitor(repository, params.monitorId).pipe(
-          Effect.flatMap((monitor) =>
-            mattermost
-              .getUser(payload.mattermostUserId)
-              .pipe(Effect.flatMap((user) => targets.add(params.monitorId, user)))
-              .pipe(
-                Effect.flatMap((target) =>
-                  events
-                    .publish({ _tag: 'NotificationTargetAdded', monitor, target })
-                    .pipe(Effect.as(target)),
-                ),
-              ),
-          ),
-        ),
+
+      .handle(
+        'addNotificationTarget',
+        Effect.fn(function* ({ params, payload }) {
+          const monitor = yield* ensureMonitor(repository, params.monitorId)
+          const user = yield* mattermost.getUser(payload.mattermostUserId)
+          const target = yield* targets.add(monitor.id, user)
+          yield* events.publish({ _tag: 'NotificationTargetAdded', monitor, target })
+          return target
+        }),
       )
-      .handle('removeNotificationTarget', ({ params }) =>
-        ensureMonitor(repository, params.monitorId).pipe(
-          Effect.flatMap((monitor) =>
-            targets.remove(params.monitorId, params.mattermostUserId).pipe(
-              Effect.flatMap(
-                Option.match({
-                  onNone: () => Effect.void,
-                  onSome: (target) =>
-                    events.publish({ _tag: 'NotificationTargetRemoved', monitor, target }),
-                }),
-              ),
-            ),
-          ),
-        ),
+
+      .handle(
+        'removeNotificationTarget',
+        Effect.fn(function* ({ params }) {
+          const monitor = yield* ensureMonitor(repository, params.monitorId)
+          const removedTarget = yield* targets.remove(monitor.id, params.mattermostUserId)
+          yield* Option.match(removedTarget, {
+            onNone: () => Effect.void,
+            onSome: (target) =>
+              events.publish({ _tag: 'NotificationTargetRemoved', monitor, target }),
+          })
+        }),
       )
   }),
 )

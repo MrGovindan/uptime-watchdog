@@ -58,7 +58,7 @@ const shareDependencies = () => {
 
   return {
     events,
-    monitors: monitorRepositoryLayer.pipe(Layer.provide(events), Layer.provide(database)),
+    monitors: monitorRepositoryLayer.pipe(Layer.provide(database)),
     targets: notificationTargetRepositoryLayer.pipe(Layer.provide(database)),
   }
 }

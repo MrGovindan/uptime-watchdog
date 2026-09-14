@@ -19,7 +19,7 @@ const application = Layer.unwrap(
 
     const database = Database.layer(databasePath)
     const events = WatchdogEvents.layer
-    const repository = MonitorRepository.layer.pipe(Layer.provide(events), Layer.provide(database))
+    const repository = MonitorRepository.layer.pipe(Layer.provide(database))
     const targets = NotificationTargetRepository.layer.pipe(Layer.provide(database))
     const mattermost = Mattermost.layer(mattermostConfig)
 

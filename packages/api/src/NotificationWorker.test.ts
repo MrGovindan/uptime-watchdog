@@ -50,7 +50,7 @@ const makeLayers = (overrides: Partial<MattermostInterface> = {}) => {
   const messages = Effect.runSync(Queue.unbounded<SentMessage>())
   const database = Database.layer(':memory:')
   const events = WatchdogEvents.layer
-  const monitors = monitorRepositoryLayer.pipe(Layer.provide(events), Layer.provide(database))
+  const monitors = monitorRepositoryLayer.pipe(Layer.provide(database))
   const targets = notificationTargetRepositoryLayer.pipe(Layer.provide(database))
   const mattermost = Layer.succeed(Mattermost, {
     searchUsers: () => Effect.succeed([mattermostUser]),

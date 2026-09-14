@@ -33,7 +33,7 @@ const httpClient = Layer.succeed(
 const makeLayers = (seed: boolean) => {
   const database = Database.layer(':memory:')
   const events = WatchdogEvents.layer
-  const repository = MonitorRepository.layer.pipe(Layer.provide(events), Layer.provide(database))
+  const repository = MonitorRepository.layer.pipe(Layer.provide(database))
   const seeded = seed
     ? repository.pipe(
         Layer.tap((context) =>
@@ -56,6 +56,7 @@ describe('MonitorStreams', () => {
       // Arrange
       const streams = yield* MonitorStreams.MonitorStreams
       const repository = yield* MonitorRepository.MonitorRepository
+      const events = yield* WatchdogEvents.WatchdogEvents
       const collected = yield* streams.observations.pipe(
         Stream.take(1),
         Stream.runCollect,
@@ -65,6 +66,7 @@ describe('MonitorStreams', () => {
 
       // Act
       const created = yield* repository.register(definition)
+      yield* events.publish({ _tag: 'MonitorRegistered', monitor: created })
 
       // Assert
       const [observed] = Array.from(yield* Fiber.join(collected))
@@ -122,6 +124,7 @@ describe('MonitorStreams', () => {
 
       // Act
       const created = yield* repository.register(definition)
+      yield* events.publish({ _tag: 'MonitorRegistered', monitor: created })
       yield* Fiber.join(probe)
       yield* Effect.yieldNow
       expect(yield* Ref.get(observed)).toBe(1)
