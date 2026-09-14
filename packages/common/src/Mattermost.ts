@@ -1,5 +1,4 @@
 import { Schema } from 'effect'
-import { MonitorId } from './Monitor'
 
 export const MattermostUserId = Schema.Trim.pipe(Schema.check(Schema.isNonEmpty()))
 export type MattermostUserId = typeof MattermostUserId.Type
@@ -24,6 +23,5 @@ export type MattermostUserSearchDefinition = typeof MattermostUserSearchDefiniti
 
 export const MattermostTestDefinition = Schema.Struct({
   mattermostUserId: MattermostUserId,
-  monitorId: Schema.optional(MonitorId),
 })
 export type MattermostTestDefinition = typeof MattermostTestDefinition.Type

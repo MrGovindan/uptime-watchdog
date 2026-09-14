@@ -14,9 +14,9 @@ import * as Database from './Database'
 import { Mattermost } from './Mattermost'
 import type { Interface as MattermostInterface } from './Mattermost'
 import * as MonitorApi from './MonitorApi'
-import * as MonitorEvents from './MonitorEvents'
 import { layer as monitorRepositoryLayer } from './MonitorRepository'
 import { layer as notificationTargetRepositoryLayer } from './NotificationTargetRepository'
+import * as WatchdogEvents from './WatchdogEvents'
 
 const dependencies = Layer.provideMerge(BunHttpServer.layerHttpServices)
 
@@ -54,18 +54,20 @@ const mattermostStub = (overrides: Partial<MattermostInterface> = {}): Layer.Lay
 
 const shareDependencies = () => {
   const database = Database.layer(':memory:')
-  const events = MonitorEvents.layer
+  const events = WatchdogEvents.layer
 
   return {
+    events,
     monitors: monitorRepositoryLayer.pipe(Layer.provide(events), Layer.provide(database)),
     targets: notificationTargetRepositoryLayer.pipe(Layer.provide(database)),
   }
 }
 
 const groupLayer = (overrides: Partial<MattermostInterface> = {}) => {
-  const { monitors, targets } = shareDependencies()
+  const { events, monitors, targets } = shareDependencies()
 
   return Layer.mergeAll(MonitorApi.MonitorGroupLive, MonitorApi.NotificationGroupLive).pipe(
+    Layer.provide(events),
     Layer.provide(monitors),
     Layer.provide(targets),
     Layer.provide(mattermostStub(overrides)),
@@ -74,9 +76,10 @@ const groupLayer = (overrides: Partial<MattermostInterface> = {}) => {
 }
 
 const applicationLayer = (overrides: Partial<MattermostInterface> = {}) => {
-  const { monitors, targets } = shareDependencies()
+  const { events, monitors, targets } = shareDependencies()
 
   return MonitorApi.layer.pipe(
+    Layer.provide(events),
     Layer.provide(monitors),
     Layer.provide(targets),
     Layer.provide(mattermostStub(overrides)),
@@ -332,6 +335,40 @@ describe('notification targets', () => {
   )
 })
 
+describe('monitor deletion', () => {
+  it.effect('deletes a monitor and cascades its notification targets', () =>
+    withWebHandler(applicationLayer(), (handler) =>
+      Effect.gen(function* () {
+        const monitorId = yield* registerViaHttp(handler)
+        yield* request(
+          handler,
+          `/monitor/${monitorId}/notification-target`,
+          json({ mattermostUserId: mattermostUser.id }),
+        )
+
+        const deleted = yield* request(handler, `/monitor/${monitorId}`, { method: 'DELETE' })
+
+        expect(deleted.status).toBe(204)
+
+        const after = yield* request(handler, `/monitor/${monitorId}/notification-target`)
+        expect(after.status).toBe(404)
+      }),
+    ),
+  )
+
+  it.effect('rejects deleting an unknown monitor with 404', () =>
+    withWebHandler(applicationLayer(), (handler) =>
+      Effect.gen(function* () {
+        const response = yield* request(handler, '/monitor/00000000-0000-4000-8000-000000000000', {
+          method: 'DELETE',
+        })
+
+        expect(response.status).toBe(404)
+      }),
+    ),
+  )
+})
+
 describe('mattermost notification endpoints', () => {
   it.effect('searches mattermost users', () =>
     Effect.gen(function* () {
@@ -357,24 +394,23 @@ describe('mattermost notification endpoints', () => {
     ),
   )
 
-  it.effect('sends a test direct message including the monitor name', () => {
+  it.effect('sends a test direct message', () => {
     const sent = Effect.runSync(
       Ref.make<ReadonlyArray<Readonly<{ userId: string; message: string }>>>([]),
     )
 
     return Effect.gen(function* () {
-      const { monitor, notification } = yield* openClient
+      const { notification } = yield* openClient
 
-      const created = yield* monitor.register({ payload: definition })
       yield* notification.sendMattermostTest({
-        payload: { mattermostUserId: botUser.id, monitorId: created.id },
+        payload: { mattermostUserId: botUser.id },
       })
 
       const messages = yield* Ref.get(sent)
       expect(messages).toEqual([
         {
           userId: botUser.id,
-          message: 'This is a test notification from Uptime Watchdog for monitor "Prod API".',
+          message: 'This is a test notification from Uptime Watchdog.',
         },
       ])
     }).pipe(

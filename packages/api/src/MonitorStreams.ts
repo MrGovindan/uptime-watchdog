@@ -7,9 +7,9 @@ import {
 } from '@uptime-watchdog/common'
 import { Context, Effect, Layer, Schedule, Stream } from 'effect'
 import * as CheckUptime from './CheckUptime'
-import * as MonitorEvents from './MonitorEvents'
 import { MonitorRepository } from './MonitorRepository'
 import * as StreamRegistry from './StreamRegistry'
+import { WatchdogEvent, WatchdogEvents } from './WatchdogEvents'
 
 type RegistryValue = Readonly<{ monitorName: MonitorName; observation: UptimeObservation }>
 
@@ -34,7 +34,7 @@ const createMonitorStream = (monitor: Monitor, checkUptime: CheckUptime.Interfac
 
 const make = Effect.gen(function* () {
   const repository = yield* MonitorRepository
-  const events = yield* MonitorEvents.MonitorEvents
+  const events = yield* WatchdogEvents
   const registry = yield* StreamRegistry.tag<MonitorId, RegistryValue>()
   const checkUptime = yield* CheckUptime.CheckUptime
 
@@ -45,8 +45,11 @@ const make = Effect.gen(function* () {
   // Subscribe before loading so a monitor created during startup is not missed.
   yield* events.stream.pipe(
     Stream.runForEach((event) =>
-      MonitorEvents.MonitorEvent.match(event, {
+      WatchdogEvent.match(event, {
         MonitorRegistered: ({ monitor }) => start(monitor),
+        MonitorDeleted: ({ monitor }) => registry.remove(monitor.id),
+        NotificationTargetAdded: () => Effect.void,
+        NotificationTargetRemoved: () => Effect.void,
       }),
     ),
     Effect.forkScoped,

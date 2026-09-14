@@ -1,12 +1,13 @@
 import { Monitor, type MonitorDefinition, MonitorId } from '@uptime-watchdog/common'
 import { Context, Effect, Layer, Option, Schema } from 'effect'
 import { SqlClient, SqlModel, SqlSchema } from 'effect/unstable/sql'
-import { MonitorEvents } from './MonitorEvents'
+import { WatchdogEvents } from './WatchdogEvents'
 
 export interface Interface {
   readonly register: (definition: MonitorDefinition) => Effect.Effect<Monitor>
   readonly list: Effect.Effect<ReadonlyArray<Monitor>>
   readonly find: (id: MonitorId) => Effect.Effect<Option.Option<Monitor>>
+  readonly delete: (id: MonitorId) => Effect.Effect<Option.Option<Monitor>>
 }
 
 export class MonitorRepository extends Context.Service<MonitorRepository, Interface>()(
@@ -15,7 +16,7 @@ export class MonitorRepository extends Context.Service<MonitorRepository, Interf
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
-  const events = yield* MonitorEvents
+  const events = yield* WatchdogEvents
 
   const model = yield* SqlModel.makeRepository(Monitor, {
     tableName: 'monitor',
@@ -57,7 +58,17 @@ const make = Effect.gen(function* () {
         sql`SELECT id, name, request, cronSchedule, createdAt FROM monitor WHERE id = ${id} LIMIT 1`,
     })({ id }).pipe(Effect.orDie)
 
-  return { register, list, find }
+  const deleteMonitor = (id: MonitorId): Effect.Effect<Option.Option<Monitor>> =>
+    SqlSchema.findOneOption({
+      Request: Schema.Struct({ id: MonitorId }),
+      Result: Monitor,
+      execute: ({ id }) => sql`
+        DELETE FROM monitor WHERE id = ${id}
+        RETURNING id, name, request, cronSchedule, createdAt
+      `,
+    })({ id }).pipe(Effect.orDie)
+
+  return { register, list, find, delete: deleteMonitor }
 })
 
 export const layer = Layer.effect(MonitorRepository, make)

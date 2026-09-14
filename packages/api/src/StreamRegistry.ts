@@ -2,6 +2,7 @@ import { Context, Effect, FiberMap, Layer, PubSub, Stream } from 'effect'
 
 export interface Interface<Key, T, R = never> {
   readonly add: (key: Key, stream: Stream.Stream<T, never, R>) => Effect.Effect<void, never, R>
+  readonly remove: (key: Key) => Effect.Effect<void>
   readonly stream: Stream.Stream<readonly [Key, T]>
 }
 
@@ -19,8 +20,11 @@ const make = <Key, T, R>() =>
         Stream.runForEach(stream, (value) => PubSub.publish(pubsub, [key, value])),
       ).pipe(Effect.asVoid)
 
+    const remove = (key: Key): Effect.Effect<void> => FiberMap.remove(fibers, key)
+
     return {
       add,
+      remove,
       stream: Stream.fromPubSub(pubsub),
     } satisfies Interface<Key, T, R>
   })

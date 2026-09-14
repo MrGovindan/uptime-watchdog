@@ -55,6 +55,11 @@ export const Api = HttpApi.make('UptimeWatchdog')
       HttpApiEndpoint.get('list', '/monitor', {
         success: Schema.Array(Monitor.json),
       }),
+      HttpApiEndpoint.delete('deleteMonitor', '/monitor/:monitorId', {
+        params: { monitorId: MonitorId },
+        success: HttpApiSchema.NoContent,
+        error: MonitorNotFound,
+      }),
       HttpApiEndpoint.get('listNotificationTargets', '/monitor/:monitorId/notification-target', {
         params: { monitorId: MonitorId },
         success: Schema.Array(NotificationTarget.json),

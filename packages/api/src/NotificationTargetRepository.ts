@@ -1,6 +1,6 @@
 import {
   type MattermostUser,
-  type MattermostUserId,
+  MattermostUserId,
   MonitorId,
   NotificationTarget,
   NotificationTargetAlreadyExists,
@@ -14,7 +14,10 @@ export interface Interface {
     monitorId: MonitorId,
     user: MattermostUser,
   ) => Effect.Effect<NotificationTarget, NotificationTargetAlreadyExists>
-  readonly remove: (monitorId: MonitorId, mattermostUserId: MattermostUserId) => Effect.Effect<void>
+  readonly remove: (
+    monitorId: MonitorId,
+    mattermostUserId: MattermostUserId,
+  ) => Effect.Effect<Option.Option<NotificationTarget>>
 }
 
 export class NotificationTargetRepository extends Context.Service<
@@ -85,11 +88,19 @@ const make = Effect.gen(function* () {
     })
   })
 
-  const remove = (monitorId: MonitorId, mattermostUserId: MattermostUserId): Effect.Effect<void> =>
-    sql`
-      DELETE FROM notification_target
-      WHERE monitorId = ${monitorId} AND mattermostUserId = ${mattermostUserId}
-    `.pipe(Effect.asVoid, Effect.orDie)
+  const remove = (
+    monitorId: MonitorId,
+    mattermostUserId: MattermostUserId,
+  ): Effect.Effect<Option.Option<NotificationTarget>> =>
+    SqlSchema.findOneOption({
+      Request: Schema.Struct({ monitorId: MonitorId, mattermostUserId: MattermostUserId }),
+      Result: NotificationTarget,
+      execute: ({ monitorId, mattermostUserId }) => sql`
+        DELETE FROM notification_target
+        WHERE monitorId = ${monitorId} AND mattermostUserId = ${mattermostUserId}
+        RETURNING monitorId, mattermostUserId, mattermostUsername, mattermostDisplayName, createdAt
+      `,
+    })({ monitorId, mattermostUserId }).pipe(Effect.orDie)
 
   return { list, add, remove } satisfies Interface
 })

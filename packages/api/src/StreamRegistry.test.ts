@@ -57,4 +57,31 @@ describe('StreamRegistry', () => {
       expect(Array.from(values)).toEqual([['a', 2]])
     }).pipe(Effect.provide(layer<string, number>())),
   )
+
+  it.effect('removing a key interrupts its stream', () =>
+    Effect.gen(function* () {
+      // Arrange
+      const registry = yield* Registry
+      const removed = yield* Deferred.make<void>()
+      const kept = yield* Deferred.make<void>()
+
+      const collected = yield* registry.stream.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.forkChild,
+      )
+      yield* Effect.yieldNow
+
+      // Act
+      yield* registry.add('a', Stream.fromEffect(Deferred.await(removed).pipe(Effect.as(1))))
+      yield* registry.remove('a')
+      yield* registry.add('b', Stream.fromEffect(Deferred.await(kept).pipe(Effect.as(2))))
+      yield* Deferred.succeed(removed, undefined)
+      yield* Deferred.succeed(kept, undefined)
+
+      // Assert
+      const values = yield* Fiber.join(collected)
+      expect(Array.from(values)).toEqual([['b', 2]])
+    }).pipe(Effect.provide(layer<string, number>())),
+  )
 })

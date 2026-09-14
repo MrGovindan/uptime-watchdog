@@ -1,13 +1,13 @@
 import { MonitorDefinition } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
-import { Context, Duration, Effect, Fiber, Layer, Result, Schema, Stream } from 'effect'
+import { Context, Duration, Effect, Fiber, Layer, Ref, Result, Schema, Stream } from 'effect'
 import { TestClock } from 'effect/testing'
 import { HttpClient, HttpClientResponse } from 'effect/unstable/http'
 import * as CheckUptime from './CheckUptime'
 import * as Database from './Database'
-import * as MonitorEvents from './MonitorEvents'
 import * as MonitorRepository from './MonitorRepository'
 import * as MonitorStreams from './MonitorStreams'
+import * as WatchdogEvents from './WatchdogEvents'
 
 const definition = Effect.runSync(
   Schema.decodeUnknownEffect(MonitorDefinition)({
@@ -32,7 +32,7 @@ const httpClient = Layer.succeed(
 
 const makeLayers = (seed: boolean) => {
   const database = Database.layer(':memory:')
-  const events = MonitorEvents.layer
+  const events = WatchdogEvents.layer
   const repository = MonitorRepository.layer.pipe(Layer.provide(events), Layer.provide(database))
   const seeded = seed
     ? repository.pipe(
@@ -47,7 +47,7 @@ const makeLayers = (seed: boolean) => {
     Layer.provide(CheckUptime.layer),
     Layer.provide(httpClient),
   )
-  return Layer.merge(streams, repository)
+  return Layer.mergeAll(streams, repository, events)
 }
 
 describe('MonitorStreams', () => {
@@ -97,5 +97,42 @@ describe('MonitorStreams', () => {
       expect(observed?.monitorName).toBe('Prod API')
       expect(Result.isSuccess(observed!.observation.response)).toBe(true)
     }).pipe(Effect.provide(makeLayers(true))),
+  )
+
+  it.effect('stops the stream when the monitor is deleted', () =>
+    Effect.gen(function* () {
+      // Arrange
+      const streams = yield* MonitorStreams.MonitorStreams
+      const repository = yield* MonitorRepository.MonitorRepository
+      const events = yield* WatchdogEvents.WatchdogEvents
+      const observed = yield* Ref.make(0)
+
+      yield* streams.observations.pipe(
+        Stream.runForEach(() => Ref.update(observed, (count) => count + 1)),
+        Effect.forkChild,
+      )
+      yield* Effect.yieldNow
+
+      const probe = yield* streams.observations.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.forkChild,
+      )
+      yield* Effect.yieldNow
+
+      // Act
+      const created = yield* repository.register(definition)
+      yield* Fiber.join(probe)
+      yield* Effect.yieldNow
+      expect(yield* Ref.get(observed)).toBe(1)
+
+      yield* events.publish({ _tag: 'MonitorDeleted', monitor: created, targets: [] })
+      yield* Effect.yieldNow
+      yield* TestClock.adjust(Duration.minutes(1))
+      yield* Effect.yieldNow
+
+      // Assert
+      expect(yield* Ref.get(observed)).toBe(1)
+    }).pipe(Effect.provide(makeLayers(false))),
   )
 })
