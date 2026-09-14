@@ -1,0 +1,278 @@
+import { Monitor, MonitorId } from '@uptime-watchdog/common'
+import { Array, Option } from 'effect'
+import { AsyncData, Update } from 'foldkit'
+import { NotValidated } from 'foldkit/fieldValidation'
+import { evo } from 'foldkit/struct'
+
+import { ApiClient } from './apiClient'
+import { DeleteMonitor, ListMonitors, RegisterMonitor, UpdateMonitor } from './command'
+import {
+  foldAddMonitorDialog,
+  foldCloseAddMonitorDialog,
+  foldCloseDeleteMonitorDialog,
+  foldDeleteMonitorDialog,
+  foldNotificationTargets,
+  foldOpenAddMonitorDialog,
+  foldOpenDeleteMonitorDialog,
+  foldOpenNotificationTargets,
+  foldShowToast,
+  foldToast,
+  resetForm,
+} from './folds'
+import { Message } from './message'
+import { Form, formForMonitor, toMonitorDefinition, validateForm } from './monitorForm'
+import { type Model, MonitorsAsyncData } from './model'
+
+// MONITOR LIST
+
+const insertMonitor = (model: Model, monitor: Monitor): Model => {
+  if (AsyncData.hasData(model.monitors)) {
+    const existing = Option.getOrElse(AsyncData.getData(model.monitors), () => [])
+    const data = [monitor, ...existing]
+    return evo(model, { monitors: () => MonitorsAsyncData.Success({ data }) })
+  }
+
+  return evo(model, {
+    monitors: () => MonitorsAsyncData.Success({ data: [monitor] }),
+  })
+}
+
+const replaceMonitor = (model: Model, monitor: Monitor): Model => {
+  if (!AsyncData.hasData(model.monitors)) {
+    return model
+  }
+
+  const existing = Option.getOrElse(AsyncData.getData(model.monitors), () => [])
+  const data = Array.map(existing, (current) => (current.id === monitor.id ? monitor : current))
+
+  return evo(model, { monitors: () => MonitorsAsyncData.Success({ data }) })
+}
+
+const removeMonitor = (model: Model, monitorId: MonitorId): Model => {
+  if (!AsyncData.hasData(model.monitors)) {
+    return model
+  }
+
+  const existing = Option.getOrElse(AsyncData.getData(model.monitors), () => [])
+  const data = Array.filter(existing, (current) => current.id !== monitorId)
+
+  return evo(model, { monitors: () => MonitorsAsyncData.Success({ data }) })
+}
+
+// UPDATE
+
+export const update = (model: Model, message: Message) =>
+  Message.match<Update.Return<Model, Message, ApiClient>>(message, {
+    CompletedListMonitors: ({ monitors }) => ({
+      model: evo(model, {
+        monitors: () => MonitorsAsyncData.Success({ data: monitors }),
+      }),
+    }),
+
+    FailedListMonitors: ({ error }) => ({
+      model: evo(model, {
+        monitors: () => MonitorsAsyncData.Failure({ error }),
+      }),
+    }),
+
+    ClickedRetryListMonitors: () => ({
+      model: evo(model, { monitors: () => MonitorsAsyncData.Loading() }),
+      commands: [ListMonitors()],
+    }),
+
+    ClickedOpenAddMonitor: () => foldOpenAddMonitorDialog(resetForm(model)),
+
+    ClickedOpenEditMonitor: ({ monitor }) =>
+      foldOpenAddMonitorDialog(
+        evo(resetForm(model), {
+          form: () => formForMonitor(monitor),
+          editingMonitorId: () => Option.some(monitor.id),
+        }),
+      ),
+
+    GotAddMonitorDialogMessage: ({ message: dialogMessage }) =>
+      foldAddMonitorDialog(model, dialogMessage),
+
+    UpdatedName: ({ value }) => ({
+      model: evo(model, {
+        form: (form) => evo(form, { name: () => NotValidated({ value }) }),
+      }),
+    }),
+
+    UpdatedHostname: ({ value }) => ({
+      model: evo(model, {
+        form: (form) => evo(form, { hostname: () => NotValidated({ value }) }),
+      }),
+    }),
+
+    UpdatedPort: ({ value }) => ({
+      model: evo(model, {
+        form: (form) => evo(form, { port: () => NotValidated({ value }) }),
+      }),
+    }),
+
+    UpdatedProtocol: ({ protocol }) => ({
+      model: evo(model, {
+        form: (form) => evo(form, { protocol: () => protocol }),
+      }),
+    }),
+
+    UpdatedMethod: ({ method }) => ({
+      model: evo(model, {
+        form: (form) => evo(form, { method: () => method }),
+      }),
+    }),
+
+    UpdatedPath: ({ value }) => ({
+      model: evo(model, {
+        form: (form) => evo(form, { path: () => value }),
+      }),
+    }),
+
+    UpdatedCronSchedule: ({ value }) => ({
+      model: evo(model, {
+        form: (form) => evo(form, { cronSchedule: () => NotValidated({ value }) }),
+      }),
+    }),
+
+    ClickedAddHeader: () => ({
+      model: evo(model, {
+        form: (form: Form) =>
+          evo(form, {
+            headers: (headers) => [
+              ...headers,
+              {
+                id: `header-${form.headerSequence}`,
+                name: NotValidated({ value: '' }),
+                value: NotValidated({ value: '' }),
+              },
+            ],
+            headerSequence: (sequence) => sequence + 1,
+          }),
+      }),
+    }),
+
+    ClickedRemoveHeader: ({ id }) => ({
+      model: evo(model, {
+        form: (form) => evo(form, { headers: Array.filter((header) => header.id !== id) }),
+      }),
+    }),
+
+    UpdatedHeaderName: ({ id, value }) => ({
+      model: evo(model, {
+        form: (form: Form) =>
+          evo(form, {
+            headers: Array.map((header) =>
+              header.id === id ? { ...header, name: NotValidated({ value }) } : header,
+            ),
+          }),
+      }),
+    }),
+
+    UpdatedHeaderValue: ({ id, value }) => ({
+      model: evo(model, {
+        form: (form: Form) =>
+          evo(form, {
+            headers: Array.map((header) =>
+              header.id === id ? { ...header, value: NotValidated({ value }) } : header,
+            ),
+          }),
+      }),
+    }),
+
+    ClickedCreateMonitor: () => {
+      const validated = validateForm(model.form)
+      if (!validated.isValid) {
+        return { model: evo(model, { form: () => validated.form }) }
+      }
+
+      const definition = toMonitorDefinition(validated.form)
+      const closed = foldCloseAddMonitorDialog(model)
+
+      return {
+        model: closed.model,
+        commands: [RegisterMonitor({ definition }), ...(closed.commands ?? [])],
+      }
+    },
+
+    ClickedUpdateMonitor: () => {
+      if (Option.isNone(model.editingMonitorId)) {
+        return { model }
+      }
+
+      const validated = validateForm(model.form)
+      if (!validated.isValid) {
+        return { model: evo(model, { form: () => validated.form }) }
+      }
+
+      const definition = toMonitorDefinition(validated.form)
+      const closed = foldCloseAddMonitorDialog(model)
+
+      return {
+        model: closed.model,
+        commands: [
+          UpdateMonitor({ monitorId: model.editingMonitorId.value, definition }),
+          ...(closed.commands ?? []),
+        ],
+      }
+    },
+
+    CompletedRegisterMonitor: ({ monitor }) =>
+      foldShowToast(insertMonitor(model, monitor), {
+        variant: 'Success',
+        payload: { message: 'Monitor created' },
+      }),
+
+    FailedRegisterMonitor: ({ error }) =>
+      foldShowToast(model, { variant: 'Error', payload: { message: error } }),
+
+    CompletedUpdateMonitor: ({ monitor }) =>
+      foldShowToast(replaceMonitor(model, monitor), {
+        variant: 'Success',
+        payload: { message: 'Monitor updated' },
+      }),
+
+    FailedUpdateMonitor: ({ error }) =>
+      foldShowToast(model, { variant: 'Error', payload: { message: error } }),
+
+    ClickedRequestDeleteMonitor: ({ monitor }) =>
+      foldOpenDeleteMonitorDialog(evo(model, { maybeDeleteMonitor: () => Option.some(monitor) })),
+
+    ClickedCancelDeleteMonitor: () => foldCloseDeleteMonitorDialog(model),
+
+    ClickedConfirmDeleteMonitor: () => {
+      if (Option.isNone(model.maybeDeleteMonitor)) {
+        return { model }
+      }
+
+      const closed = foldCloseDeleteMonitorDialog(model)
+
+      return {
+        model: closed.model,
+        commands: [
+          DeleteMonitor({ monitorId: model.maybeDeleteMonitor.value.id }),
+          ...(closed.commands ?? []),
+        ],
+      }
+    },
+
+    GotDeleteMonitorDialogMessage: ({ message: dialogMessage }) =>
+      foldDeleteMonitorDialog(model, dialogMessage),
+
+    CompletedDeleteMonitor: ({ monitorId }) =>
+      foldShowToast(removeMonitor(model, monitorId), {
+        variant: 'Success',
+        payload: { message: 'Monitor deleted' },
+      }),
+
+    FailedDeleteMonitor: ({ error }) =>
+      foldShowToast(model, { variant: 'Error', payload: { message: error } }),
+
+    ClickedOpenNotificationTargets: ({ monitorId, monitorName }) =>
+      foldOpenNotificationTargets({ monitorId, monitorName })(model),
+
+    GotNotificationTargetsMessage: ({ message: notificationTargetsMessage }) =>
+      foldNotificationTargets(model, notificationTargetsMessage),
+
+    GotToastMessage: ({ message: toastMessage }) => foldToast(model, toastMessage),
+  })

@@ -13,7 +13,9 @@ import {
   monitor,
 } from './fixtures'
 import { Dialog } from '@foldkit/ui'
-import { makeInitialModel, update, view } from './main'
+import { makeInitialModel } from './model'
+import { update } from './update'
+import { view } from './view'
 
 describe('view', () => {
   test('shows the empty state when there are no monitors', () => {

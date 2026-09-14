@@ -4,7 +4,8 @@ import { Option, Schema } from 'effect'
 import { Valid } from 'foldkit/fieldValidation'
 import { evo } from 'foldkit/struct'
 
-import { MonitorsAsyncData, makeInitialForm, makeInitialModel } from './main'
+import { MonitorsAsyncData, makeInitialModel } from './model'
+import { makeInitialForm } from './monitorForm'
 
 export const monitorJson = {
   id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',

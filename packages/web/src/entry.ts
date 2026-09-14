@@ -1,8 +1,11 @@
 import { Runtime } from 'foldkit'
 
 import { layer as apiClientLayer } from './apiClient'
-import { Model, init, update, view } from './main'
+import { init } from './main'
+import { Model } from './model'
 import { Message } from './message'
+import { update } from './update'
+import { view } from './view'
 
 const application = Runtime.makeApplication({
   Model,

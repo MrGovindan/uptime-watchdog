@@ -6,7 +6,8 @@ import { evo } from 'foldkit/struct'
 import { expect, test } from 'vitest'
 
 import { DeleteMonitor, ListMonitors, RegisterMonitor, UpdateMonitor } from './command'
-import { makeInitialModel, update, MonitorsAsyncData, type Model } from './main'
+import { makeInitialModel, MonitorsAsyncData, type Model } from './model'
+import { update } from './update'
 import { Message } from './message'
 import {
   modelReadyToCreate,
