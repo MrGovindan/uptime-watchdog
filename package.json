@@ -6,7 +6,9 @@
   ],
   "type": "module",
   "scripts": {
-    "dev": "bun run --parallel --filter '*' dev",
+    "dev": "set -a; . ./.dev.env; set +a; bun run --parallel --filter '*' dev",
+    "build": "bun run typecheck && bun run test && bun run lint && bun scripts/build.ts",
+    "start": "if [ -f .prod.env ]; then set -a; . ./.prod.env; set +a; fi; sh builds/current/run",
     "lint": "oxlint --disable-nested-config",
     "lint:fix": "oxlint --fix --disable-nested-config",
     "format": "oxfmt",
