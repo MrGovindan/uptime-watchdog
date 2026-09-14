@@ -21,7 +21,7 @@ that service.
 
 ## Data, calculations, and actions
 
-Borrow Eric Normand's framing (*Grokking Simplicity*): **data** is inert facts,
+Borrow Eric Normand's framing (_Grokking Simplicity_): **data** is inert facts,
 **calculations** are pure functions of their inputs, and **actions** depend on
 when and where they run (side effects). Foldkit mirrors this. The Model is data,
 `update` and `view` are calculations, and Commands and Subscriptions are
