@@ -1,6 +1,7 @@
 import {
   Monitor,
   type MonitorId,
+  type MonitorName,
   type MonitorObservation,
   type UptimeObservation,
 } from '@uptime-watchdog/common'
@@ -9,6 +10,8 @@ import * as CheckUptime from './CheckUptime'
 import * as MonitorEvents from './MonitorEvents'
 import { MonitorRepository } from './MonitorRepository'
 import * as StreamRegistry from './StreamRegistry'
+
+type RegistryValue = Readonly<{ monitorName: MonitorName; observation: UptimeObservation }>
 
 export interface Interface {
   readonly start: (monitor: Monitor) => Effect.Effect<void>
@@ -20,14 +23,19 @@ export class MonitorStreams extends Context.Service<MonitorStreams, Interface>()
 ) {}
 
 const createMonitorStream = (monitor: Monitor, checkUptime: CheckUptime.Interface) =>
-  Stream.fromEffectSchedule(checkUptime(monitor.request), Schedule.cron(monitor.cronSchedule)).pipe(
-    Stream.orDie,
-  )
+  Stream.fromEffectSchedule(
+    checkUptime(monitor.request).pipe(
+      Effect.annotateSpans({ 'monitor.name': monitor.name, 'monitor.id': monitor.id }),
+      Effect.annotateLogs({ monitor: monitor.name }),
+      Effect.map((observation) => ({ monitorName: monitor.name, observation })),
+    ),
+    Schedule.cron(monitor.cronSchedule),
+  ).pipe(Stream.orDie)
 
 const make = Effect.gen(function* () {
   const repository = yield* MonitorRepository
   const events = yield* MonitorEvents.MonitorEvents
-  const registry = yield* StreamRegistry.tag<MonitorId, UptimeObservation>()
+  const registry = yield* StreamRegistry.tag<MonitorId, RegistryValue>()
   const checkUptime = yield* CheckUptime.CheckUptime
 
   const start = Effect.fn('MonitorStreams.start')((monitor: Monitor) =>
@@ -50,11 +58,15 @@ const make = Effect.gen(function* () {
   return {
     start,
     observations: registry.stream.pipe(
-      Stream.map(([monitorId, observation]) => ({ monitorId, observation })),
+      Stream.map(([monitorId, { monitorName, observation }]) => ({
+        monitorId,
+        monitorName,
+        observation,
+      })),
     ),
   } satisfies Interface
 })
 
 export const layer = Layer.effect(MonitorStreams, make).pipe(
-  Layer.provide(StreamRegistry.layer<MonitorId, UptimeObservation>()),
+  Layer.provide(StreamRegistry.layer<MonitorId, RegistryValue>()),
 )

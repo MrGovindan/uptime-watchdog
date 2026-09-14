@@ -75,6 +75,7 @@ test('submitting an invalid form reveals errors and dispatches nothing', () => {
     message(Message.ClickedCreateMonitor()),
     Command.expectNone(),
     model((current) => {
+      expect(current.form.name._tag).toBe('Invalid')
       expect(current.form.hostname._tag).toBe('Invalid')
       expect(current.form.cronSchedule._tag).toBe('Invalid')
       expect(current.dialog.isOpen).toBe(true)

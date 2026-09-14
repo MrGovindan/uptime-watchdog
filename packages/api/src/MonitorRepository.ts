@@ -29,6 +29,7 @@ const make = Effect.gen(function* () {
       .insert(
         Monitor.insert.make({
           id: MonitorId.make(crypto.randomUUID()),
+          name: definition.name,
           request: definition.request,
           cronSchedule: definition.cronSchedule,
         }),
@@ -44,7 +45,7 @@ const make = Effect.gen(function* () {
     Request: Schema.Struct({}),
     Result: Monitor,
     execute: () =>
-      sql`SELECT id, request, cronSchedule, createdAt FROM monitor ORDER BY createdAt DESC`,
+      sql`SELECT id, name, request, cronSchedule, createdAt FROM monitor ORDER BY createdAt DESC`,
   })({}).pipe(Effect.orDie)
 
   return { register, list }

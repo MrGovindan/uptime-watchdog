@@ -15,6 +15,7 @@ interface MonitorColumn {
 
 const expectedColumns: ReadonlyArray<MonitorColumn> = [
   { name: 'id', type: 'TEXT', notnull: 1, pk: 1 },
+  { name: 'name', type: 'TEXT', notnull: 1, pk: 0 },
   { name: 'request', type: 'TEXT', notnull: 1, pk: 0 },
   { name: 'cronSchedule', type: 'TEXT', notnull: 1, pk: 0 },
   { name: 'createdAt', type: 'TEXT', notnull: 1, pk: 0 },

@@ -26,6 +26,7 @@ const openClient = HttpApiTest.groups(Api, ['monitor'])
 
 const definition = Effect.runSync(
   Schema.decodeUnknownEffect(MonitorDefinition)({
+    name: 'Prod API',
     request: {
       hostname: 'example.test',
       port: 8080,
@@ -45,6 +46,7 @@ describe('monitor registration', () => {
       const created = yield* monitor.register({ payload: definition })
 
       expect(created.id).toMatch(/^[0-9a-f-]{36}$/)
+      expect(created.name).toBe('Prod API')
       expect(created.request).toMatchObject(definition.request)
       expect(created.request.headers).toEqual({})
       expect(Cron.isCron(created.cronSchedule)).toBe(true)
@@ -82,6 +84,41 @@ describe('monitor registration', () => {
           )
 
           expect(response.status).toBe(400)
+        }),
+      ({ dispose }) => Effect.promise(dispose),
+    ),
+  )
+
+  it.effect('rejects a definition with a missing or over-long name with 400', () =>
+    Effect.acquireUseRelease(
+      Effect.sync(() => HttpRouter.toWebHandler(applicationLayer(), { disableLogger: true })),
+      ({ handler }) =>
+        Effect.gen(function* () {
+          const bodies = [
+            {
+              request: { hostname: 'example.test', port: 8080, protocol: 'https', method: 'GET' },
+              cronSchedule: '*/5 * * * *',
+            },
+            {
+              name: 'x'.repeat(129),
+              request: { hostname: 'example.test', port: 8080, protocol: 'https', method: 'GET' },
+              cronSchedule: '*/5 * * * *',
+            },
+          ]
+
+          for (const body of bodies) {
+            const response = yield* Effect.promise(() =>
+              handler(
+                new Request('http://localhost/monitor', {
+                  method: 'POST',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify(body),
+                }),
+              ),
+            )
+
+            expect(response.status).toBe(400)
+          }
         }),
       ({ dispose }) => Effect.promise(dispose),
     ),

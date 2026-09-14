@@ -13,6 +13,7 @@ export const Message = defineMessageUnion({
   ClickedOpenAddMonitor: {},
   GotAddMonitorDialogMessage: { message: Dialog.Message },
 
+  UpdatedName: { value: Schema.String },
   UpdatedHostname: { value: Schema.String },
   UpdatedPort: { value: Schema.String },
   UpdatedProtocol: { protocol: Protocol },

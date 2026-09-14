@@ -9,6 +9,7 @@ import { ListMonitors, RegisterMonitor } from './command'
 
 const monitorJson = {
   id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+  name: 'Prod API',
   request: {
     hostname: 'example.com',
     port: 443,
@@ -21,6 +22,7 @@ const monitorJson = {
 }
 
 const definition = Schema.decodeSync(MonitorDefinition)({
+  name: 'Prod API',
   request: {
     hostname: 'example.com',
     port: 443,

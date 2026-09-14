@@ -41,3 +41,16 @@ Name the user-supplied shape of a resource `<Entity>Definition` (e.g.
 `MonitorDefinition`, derived from a model's create/update variant). "Definition"
 is preferred because it fits both creation and update; avoid role-specific names
 like `Create<Entity>Request` or vague ones like `<Entity>Configuration`.
+
+## Single source of truth
+
+Define each fact once and derive everything else from it. Validation rules,
+value schemas, limits, and other constants belong to the domain module that owns
+the fact; the API, persistence layer, and UI all reuse that one definition. Never
+restate a rule (a max length, a trim, a valid set) in a second place so it can
+drift: a UI that re-implements a server check will eventually disagree with it.
+
+This applies to derivation too. When a value can only be derived through a
+schema, drive the derivation from the schema rather than a parallel hand-rolled
+calculation, and export the constant beside the schema when it cannot be
+introspected directly.

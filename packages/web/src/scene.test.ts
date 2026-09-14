@@ -20,10 +20,11 @@ describe('view', () => {
     )
   })
 
-  test('renders each monitor with its URL and a friendly schedule description', () => {
+  test('renders each monitor with its name and URL and a friendly schedule description', () => {
     scene(
       { update, view },
       given(modelWithMonitors),
+      expect(text('Prod API')).toExist(),
       expect(text('https://example.com:443')).toExist(),
       expect(text('Every 5 minutes')).toExist(),
     )
@@ -31,6 +32,22 @@ describe('view', () => {
 
   test('shows a friendly description of the entered cron schedule', () => {
     scene({ update, view }, given(modelReadyToCreate), expect(text('Every 5 minutes')).toExist())
+  })
+
+  test('counts the name characters after trimming', () => {
+    const model = evo(modelWithOpenDialog, {
+      form: (form) => evo(form, { name: () => NotValidated({ value: '  Prod API  ' }) }),
+    })
+
+    scene({ update, view }, given(model), expect(text('8/128')).toExist())
+  })
+
+  test('shows the over-limit count for a too-long name', () => {
+    const model = evo(modelWithOpenDialog, {
+      form: (form) => evo(form, { name: () => NotValidated({ value: 'x'.repeat(129) }) }),
+    })
+
+    scene({ update, view }, given(model), expect(text('129/128')).toExist())
   })
 
   test('shows an error when the entered cron schedule is not valid', () => {
@@ -46,6 +63,7 @@ describe('view', () => {
       { update, view },
       given(modelWithOpenDialog),
       submit(role('form')),
+      expect(text('Name is required')).toExist(),
       expect(text('Hostname is required')).toExist(),
       expect(text('Enter a valid cron expression')).toExist(),
     )

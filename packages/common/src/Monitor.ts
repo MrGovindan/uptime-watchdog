@@ -8,6 +8,14 @@ export type Uuid = typeof Uuid.Type
 export const MonitorId = Schema.brand('MonitorId')(Uuid)
 export type MonitorId = typeof MonitorId.Type
 
+export const MONITOR_NAME_MAX_LENGTH = 128
+
+export const MonitorName = Schema.Trim.pipe(
+  Schema.check(Schema.isNonEmpty()),
+  Schema.check(Schema.isMaxLength(MONITOR_NAME_MAX_LENGTH)),
+)
+export type MonitorName = typeof MonitorName.Type
+
 const Cron = Schema.declare(EffectCron.isCron).pipe(
   Schema.encodeTo(Schema.String, {
     decode: SchemaGetter.transformEffect((expression: string) =>
@@ -28,6 +36,7 @@ const CreatedAt = Schema.String.pipe(
 
 export class Monitor extends Model.Class<Monitor>('Monitor')({
   id: Model.GeneratedByApp(MonitorId),
+  name: MonitorName,
   request: Model.Field({
     select: Schema.fromJsonString(UptimeRequest),
     insert: Schema.fromJsonString(UptimeRequest),
@@ -49,5 +58,6 @@ export type MonitorDefinition = typeof MonitorDefinition.Type
 
 export type MonitorObservation = {
   monitorId: MonitorId
+  monitorName: MonitorName
   observation: UptimeObservation
 }

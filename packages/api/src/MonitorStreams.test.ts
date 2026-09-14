@@ -11,6 +11,7 @@ import * as MonitorStreams from './MonitorStreams'
 
 const definition = Effect.runSync(
   Schema.decodeUnknownEffect(MonitorDefinition)({
+    name: 'Prod API',
     request: {
       hostname: 'example.test',
       port: 8080,
@@ -68,6 +69,7 @@ describe('MonitorStreams', () => {
       // Assert
       const [observed] = Array.from(yield* Fiber.join(collected))
       expect(observed?.monitorId).toBe(created.id)
+      expect(observed?.monitorName).toBe('Prod API')
       expect(Result.isSuccess(observed!.observation.response)).toBe(true)
     }).pipe(Effect.provide(makeLayers(false))),
   )
@@ -92,6 +94,7 @@ describe('MonitorStreams', () => {
       // Assert
       const [observed] = Array.from(yield* Fiber.join(collected))
       expect(observed?.monitorId).toBe(saved?.id)
+      expect(observed?.monitorName).toBe('Prod API')
       expect(Result.isSuccess(observed!.observation.response)).toBe(true)
     }).pipe(Effect.provide(makeLayers(true))),
   )

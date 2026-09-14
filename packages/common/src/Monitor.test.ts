@@ -1,16 +1,18 @@
 import { describe, expect, it } from '@effect/vitest'
 import { Cron, Effect, Schema } from 'effect'
 
-import { Monitor, MonitorDefinition, MonitorId } from './Monitor'
+import { Monitor, MonitorDefinition, MonitorId, MonitorName } from './Monitor'
 
 const uuid = '2f1c9b3e-4a5d-4f6a-8b7c-1d2e3f4a5b6c'
 
 const definitionJson = {
+  name: 'Prod API',
   request: { hostname: 'example.test', port: 8080, protocol: 'https', method: 'GET', headers: {} },
   cronSchedule: '*/5 * * * *',
 }
 
 const decodeMonitorId = Schema.decodeUnknownEffect(MonitorId)
+const decodeMonitorName = Schema.decodeUnknownEffect(MonitorName)
 const decodeDefinition = Schema.decodeUnknownEffect(MonitorDefinition)
 const decodeMonitor = Schema.decodeUnknownEffect(Monitor.json)
 const encodeMonitor = Schema.encodeUnknownEffect(Monitor.json)
@@ -22,6 +24,7 @@ const makeDefinition = () => decodeDefinition(definitionJson)
 const makeInsert = (definition: MonitorDefinition) =>
   Monitor.insert.make({
     id: MonitorId.make(uuid),
+    name: definition.name,
     request: definition.request,
     cronSchedule: definition.cronSchedule,
   })
@@ -40,6 +43,40 @@ describe('MonitorId', () => {
       const error = yield* decodeMonitorId('not-a-uuid').pipe(Effect.flip)
 
       expect(error).toBeInstanceOf(Schema.SchemaError)
+    }),
+  )
+})
+
+describe('MonitorName', () => {
+  it.effect('trims surrounding whitespace', () =>
+    Effect.gen(function* () {
+      expect(yield* decodeMonitorName('  Prod API  ')).toBe('Prod API')
+    }),
+  )
+
+  it.effect('measures the length limit after trimming', () =>
+    Effect.gen(function* () {
+      const atLimit = ` ${'x'.repeat(128)} `
+
+      expect(yield* decodeMonitorName(atLimit)).toBe('x'.repeat(128))
+    }),
+  )
+
+  it.effect('rejects a name that is too long after trimming', () =>
+    Effect.gen(function* () {
+      const error = yield* decodeMonitorName(` ${'x'.repeat(129)} `).pipe(Effect.flip)
+
+      expect(error).toBeInstanceOf(Schema.SchemaError)
+    }),
+  )
+
+  it.effect('rejects a name that is blank after trimming', () =>
+    Effect.gen(function* () {
+      for (const input of ['', '   ']) {
+        const error = yield* decodeMonitorName(input).pipe(Effect.flip)
+
+        expect(error).toBeInstanceOf(Schema.SchemaError)
+      }
     }),
   )
 })
@@ -106,6 +143,7 @@ describe('Monitor', () => {
     Effect.gen(function* () {
       const wire = {
         id: uuid,
+        name: 'Prod API',
         request: { ...definitionJson.request, headers: {} },
         cronSchedule: '0-55/5 * * * *',
         createdAt: '2026-09-13T00:00:00.000Z',

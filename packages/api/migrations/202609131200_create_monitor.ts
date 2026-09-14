@@ -7,6 +7,7 @@ export default Effect.gen(function* () {
   yield* sql`
     CREATE TABLE monitor (
       id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
       request TEXT NOT NULL,
       cronSchedule TEXT NOT NULL,
       createdAt TEXT NOT NULL

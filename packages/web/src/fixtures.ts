@@ -8,6 +8,7 @@ import { MonitorsAsyncData, makeInitialForm, makeInitialModel } from './main'
 
 export const monitorJson = {
   id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+  name: 'Prod API',
   request: {
     hostname: 'example.com',
     port: 443,
@@ -36,6 +37,7 @@ export const modelWithOpenDialog = evo(modelWithEmptyList, {
 export const modelReadyToCreate = evo(modelWithOpenDialog, {
   form: () => ({
     ...makeInitialForm(),
+    name: Valid({ value: 'Prod API' }),
     hostname: Valid({ value: 'example.com' }),
     port: Valid({ value: '443' }),
     cronSchedule: Valid({ value: '*/5 * * * *' }),

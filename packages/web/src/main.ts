@@ -1,7 +1,9 @@
 import {
   CronExpression,
   HttpMethod,
+  MONITOR_NAME_MAX_LENGTH,
   Monitor,
+  MonitorName,
   type MonitorDefinition,
   Protocol,
 } from '@uptime-watchdog/common'
@@ -50,6 +52,17 @@ const hostnameRules = makeRules({
   isEmpty: isBlank,
 })
 
+const monitorNameCount = (value: string): number => value.trim().length
+
+const isMonitorNameTooLong = (value: string): boolean =>
+  monitorNameCount(value) > 0 && Option.isNone(Schema.decodeUnknownOption(MonitorName)(value))
+
+const nameRules = makeRules({
+  required: 'Name is required',
+  isEmpty: isBlank,
+  rules: [Rule.fromSchema(MonitorName, 'Name must be 128 characters or fewer')],
+})
+
 const PortValue = Schema.NumberFromString.pipe(
   Schema.check(Schema.isInt()),
   Schema.check(Schema.isGreaterThan(0)),
@@ -86,6 +99,7 @@ const HeaderRow = Schema.Struct({
 export type HeaderRow = typeof HeaderRow.Type
 
 const Form = Schema.Struct({
+  name: Field(Schema.String),
   hostname: Field(Schema.String),
   port: Field(Schema.String),
   protocol: Protocol,
@@ -110,6 +124,7 @@ export type Model = typeof Model.Type
 const emptyField = () => NotValidated({ value: '' })
 
 export const makeInitialForm = (): Form => ({
+  name: emptyField(),
   hostname: emptyField(),
   port: emptyField(),
   protocol: 'https',
@@ -177,6 +192,7 @@ const validateHeaderRows = (
 }
 
 const validateForm = (form: Form): Readonly<{ form: Form; isValid: boolean }> => {
+  const name = validate(nameRules)(form.name.value)
   const hostname = validate(hostnameRules)(form.hostname.value)
   const port = validate(portRules)(form.port.value)
   const cronSchedule = validate(cronScheduleRules)(form.cronSchedule.value)
@@ -184,13 +200,14 @@ const validateForm = (form: Form): Readonly<{ form: Form; isValid: boolean }> =>
 
   const isValid =
     allValid([
+      [name, nameRules],
       [hostname, hostnameRules],
       [port, portRules],
       [cronSchedule, cronScheduleRules],
     ]) && headers.isValid
 
   return {
-    form: { ...form, hostname, port, cronSchedule, headers: headers.headers },
+    form: { ...form, name, hostname, port, cronSchedule, headers: headers.headers },
     isValid,
   }
 }
@@ -202,6 +219,7 @@ const toMonitorDefinition = (form: Form): MonitorDefinition => {
   const trimmedPath = form.path.trim()
 
   return {
+    name: Schema.decodeSync(MonitorName)(form.name.value),
     cronSchedule: Schema.decodeSync(CronExpression)(form.cronSchedule.value.trim()),
     request: {
       hostname: form.hostname.value.trim(),
@@ -313,6 +331,12 @@ export const update = (model: Model, message: Message) =>
 
     GotAddMonitorDialogMessage: ({ message: dialogMessage }) =>
       foldAddMonitorDialog(model, dialogMessage),
+
+    UpdatedName: ({ value }) => ({
+      model: evo(model, {
+        form: (form) => evo(form, { name: () => NotValidated({ value }) }),
+      }),
+    }),
 
     UpdatedHostname: ({ value }) => ({
       model: evo(model, {
@@ -463,10 +487,15 @@ const fieldInput = (
   onInput: (value: string) => Message,
   type: string,
   h: HtmlBuilder<Message>,
-  options?: Readonly<{ description?: string; error?: string }>,
+  options?: Readonly<{
+    description?: string
+    error?: string
+    counter?: Readonly<{ text: string; isInvalid: boolean }>
+  }>,
 ): Html => {
   const description = options?.description
   const error = options?.error
+  const counter = options?.counter
   const isInvalid = field._tag === 'Invalid' || error !== undefined
 
   return Input.view(
@@ -481,7 +510,20 @@ const fieldInput = (
         h.div(
           [h.Class('space-y-1')],
           [
-            h.label([...attributes.label, h.Class(LABEL_CLASS)], [labelText]),
+            h.div(
+              [h.Class('flex items-center justify-between')],
+              [
+                h.label([...attributes.label, h.Class(LABEL_CLASS)], [labelText]),
+                ...(counter === undefined
+                  ? []
+                  : [
+                      h.span(
+                        [h.Class(counter.isInvalid ? ERROR_CLASS : HELPER_CLASS)],
+                        [counter.text],
+                      ),
+                    ]),
+              ],
+            ),
             h.input([...attributes.input, h.Class(inputClass(isInvalid))]),
             error === undefined
               ? fieldError(field, attributes.description, h)
@@ -615,6 +657,20 @@ const addMonitorForm = (
   h.form(
     [h.Class('mt-4 space-y-4'), h.OnSubmit(Message.ClickedCreateMonitor())],
     [
+      fieldInput(
+        'monitor-name',
+        'Name',
+        model.form.name,
+        (value) => Message.UpdatedName({ value }),
+        'text',
+        h,
+        {
+          counter: {
+            text: `${monitorNameCount(model.form.name.value)}/${MONITOR_NAME_MAX_LENGTH}`,
+            isInvalid: isMonitorNameTooLong(model.form.name.value),
+          },
+        },
+      ),
       fieldInput(
         'monitor-hostname',
         'Hostname',
@@ -755,13 +811,19 @@ const monitorRow = (monitor: Monitor, h: HtmlBuilder<Message>): Html =>
     [h.Class('rounded-lg border border-gray-200 bg-white p-4')],
     [
       h.div(
-        [h.Class('flex items-center gap-3')],
+        [h.Class('flex flex-col gap-1')],
         [
-          h.span(
-            [h.Class('rounded bg-gray-100 px-2 py-0.5 font-mono text-xs')],
-            [monitor.request.method],
+          h.span([h.Class('font-medium')], [monitor.name]),
+          h.div(
+            [h.Class('flex items-center gap-3')],
+            [
+              h.span(
+                [h.Class('rounded bg-gray-100 px-2 py-0.5 font-mono text-xs')],
+                [monitor.request.method],
+              ),
+              h.span([h.Class('text-sm text-gray-500')], [monitorUrl(monitor)]),
+            ],
           ),
-          h.span([h.Class('font-medium')], [monitorUrl(monitor)]),
         ],
       ),
       h.dl(
