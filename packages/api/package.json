@@ -10,6 +10,7 @@
     "test": "bun --bun vitest run"
   },
   "dependencies": {
+    "@effect/ai-openai-compat": "^4.0.0-rc.115",
     "@effect/platform-bun": "^4.0.0-rc.115",
     "@effect/sql-sqlite-bun": "4.0.0-rc.115",
     "@uptime-watchdog/common": "workspace:*",

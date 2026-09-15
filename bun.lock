@@ -16,6 +16,7 @@
     "packages/api": {
       "name": "@uptime-watchdog/api",
       "dependencies": {
+        "@effect/ai-openai-compat": "^4.0.0-rc.115",
         "@effect/platform-bun": "^4.0.0-rc.115",
         "@effect/sql-sqlite-bun": "4.0.0-rc.115",
         "@uptime-watchdog/common": "workspace:*",
@@ -59,6 +60,8 @@
     },
   },
   "packages": {
+    "@effect/ai-openai-compat": ["@effect/ai-openai-compat@4.0.0-rc.115", "", { "peerDependencies": { "effect": "^4.0.0-rc.115" } }, "sha512-P2BdD2CbajJR3cmnnHMlhG8p9sAM+1zzB9rl4PH/3BjyJw7wkUDjSTgDOvpuYX788aLZkhzgcW2f0NBsyVs4OQ=="],
+
     "@effect/platform-browser": ["@effect/platform-browser@4.0.0-rc.115", "", { "peerDependencies": { "effect": "^4.0.0-rc.115" } }, "sha512-RwpnxRYSBHBL1HYYlRwIrwz0+1hwmn5RvgqkKI0Tb+ChOIR9UCMpXsAhnwQcGP+mBidrC7dlloL42poGHZW4yw=="],
 
     "@effect/platform-bun": ["@effect/platform-bun@4.0.0-rc.115", "", { "dependencies": { "@effect/platform-node-shared": "^4.0.0-rc.115" }, "peerDependencies": { "effect": "^4.0.0-rc.115" } }, "sha512-ilTFcs66ghInP8WHCJYa4bx/yzohYM9dRR//qjmVBBpSKu1hrCTiRWpEcc1N6zrnOEPk2kyVaKg5ykSMgiBMqQ=="],

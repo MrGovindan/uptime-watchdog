@@ -8,6 +8,7 @@ import {
 } from './Mattermost'
 import { Monitor, MonitorDefinition, MonitorId } from './Monitor'
 import { NotificationTarget, NotificationTargetDefinition } from './NotificationTarget'
+import { CronDescription, CronExpression } from './Uptime'
 
 export class MonitorNotFound extends Schema.TaggedError<MonitorNotFound>()(
   'MonitorNotFound',
@@ -44,6 +45,37 @@ export class MattermostUnavailable extends Schema.TaggedError<MattermostUnavaila
   { message: Schema.String },
   { httpApiStatus: 502 },
 ) {}
+
+export class ProviderUnavailable extends Schema.TaggedError<ProviderUnavailable>()(
+  'ProviderUnavailable',
+  { message: Schema.String },
+  { httpApiStatus: 502 },
+) {}
+
+export class TokensExhausted extends Schema.TaggedError<TokensExhausted>()(
+  'TokensExhausted',
+  {},
+  { httpApiStatus: 429 },
+) {
+  override get message(): string {
+    return 'The schedule conversion provider has no tokens available'
+  }
+}
+
+export class DescriptionNotConvertible extends Schema.TaggedError<DescriptionNotConvertible>()(
+  'DescriptionNotConvertible',
+  { description: CronDescription, message: Schema.String },
+  { httpApiStatus: 422 },
+) {
+  override get message(): string {
+    return `Schedule description "${this.description}" could not be converted to a cron expression`
+  }
+}
+
+export const ScheduleConversion = Schema.Struct({
+  cron: CronExpression,
+})
+export type ScheduleConversion = typeof ScheduleConversion.Type
 
 export const Api = HttpApi.make('UptimeWatchdog')
   .add(
@@ -91,6 +123,15 @@ export const Api = HttpApi.make('UptimeWatchdog')
           error: MonitorNotFound,
         },
       ),
+    ),
+  )
+  .add(
+    HttpApiGroup.make('schedule').add(
+      HttpApiEndpoint.post('convertDescription', '/cron', {
+        payload: Schema.Struct({ description: CronDescription }),
+        success: ScheduleConversion,
+        error: [ProviderUnavailable, TokensExhausted, DescriptionNotConvertible],
+      }),
     ),
   )
   .add(

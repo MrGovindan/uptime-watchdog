@@ -12,16 +12,29 @@ export const mattermostBaseUrl = Config.URL('MATTERMOST_BASE_URL')
 
 export const mattermostApiToken = Config.Redacted('MATTERMOST_API_TOKEN')
 
-export const server = Config.all({
+export const openCodeModel = Config.String('OPENCODE_MODEL')
+
+export const openCodeApiKey = Config.Redacted('OPENCODE_API_KEY')
+
+export const openCodeUrl = Config.URL('OPENCODE_URL')
+
+export const OpenCode = Config.all({
+  apiKey: openCodeApiKey,
+  model: openCodeModel,
+  url: openCodeUrl,
+})
+
+export const Server = Config.all({
   staticRoot,
   port,
   databasePath,
 })
 
-export const mattermost = Config.all({
+export const Mattermost = Config.all({
   baseUrl: mattermostBaseUrl,
   apiToken: mattermostApiToken,
 })
 
-export type Server = Config.Success<typeof server>
-export type Mattermost = Config.Success<typeof mattermost>
+export type Server = Config.Success<typeof Server>
+export type Mattermost = Config.Success<typeof Mattermost>
+export type OpenCode = Config.Success<typeof OpenCode>

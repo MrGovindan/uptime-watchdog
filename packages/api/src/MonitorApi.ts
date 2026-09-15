@@ -6,6 +6,7 @@ import { MonitorRepository } from './MonitorRepository'
 import type { Interface as MonitorRepositoryInterface } from './MonitorRepository'
 import * as NotificationMessages from './NotificationMessages'
 import { NotificationTargetRepository } from './NotificationTargetRepository'
+import { ScheduleGroupLive } from './ScheduleApi'
 import { WatchdogEvents } from './WatchdogEvents'
 
 const ensureMonitor = (
@@ -113,4 +114,5 @@ export const NotificationGroupLive = HttpApiBuilder.group(Api, 'notification', (
 export const layer = HttpApiBuilder.layer(Api).pipe(
   Layer.provide(MonitorGroupLive),
   Layer.provide(NotificationGroupLive),
+  Layer.provide(ScheduleGroupLive),
 )

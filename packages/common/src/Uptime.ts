@@ -34,6 +34,13 @@ export const CronExpression = Schema.String.pipe(
   }),
 )
 
+export const CronDescriptionMax = 256
+
+export const CronDescription = NonEmptyTrimmedString.pipe(
+  Schema.check(Schema.isMaxLength(CronDescriptionMax)),
+)
+export type CronDescription = typeof CronDescription.Type
+
 export const Headers = Schema.Record(NonEmptyTrimmedString, NonEmptyTrimmedString)
 
 export const UptimeRequest = Schema.Struct({

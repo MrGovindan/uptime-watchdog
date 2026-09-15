@@ -1,8 +1,9 @@
 import { BunHttpClient, BunHttpServer, BunRuntime } from '@effect/platform-bun'
 import { Effect, Layer, Stream } from 'effect'
-import { HttpRouter, HttpStaticServer } from 'effect/unstable/http'
+import { HttpClient, HttpClientRequest, HttpRouter, HttpStaticServer } from 'effect/unstable/http'
 import * as CheckUptime from './CheckUptime'
 import * as AppConfig from './Config'
+import * as CronConversion from './CronConversion'
 import * as Database from './Database'
 import * as Mattermost from './Mattermost'
 import * as MonitorApi from './MonitorApi'
@@ -11,32 +12,55 @@ import * as MonitorStreams from './MonitorStreams'
 import * as NotificationTargetRepository from './NotificationTargetRepository'
 import * as NotificationWorker from './NotificationWorker'
 import * as WatchdogEvents from './WatchdogEvents'
+import { OpenAiClient, OpenAiLanguageModel } from '@effect/ai-openai'
 
 const application = Layer.unwrap(
   Effect.gen(function* () {
-    const { port, staticRoot, databasePath } = yield* AppConfig.server
-    const mattermostConfig = yield* AppConfig.mattermost
+    const { port, staticRoot, databasePath } = yield* AppConfig.Server
+    const mattermostConfig = yield* AppConfig.Mattermost
+    const openCode = yield* AppConfig.OpenCode
+
+    const lm = OpenAiLanguageModel.layer({
+      model: openCode.model,
+      config: {
+        temperature: 0,
+        reasoning: { effort: 'minimal' },
+      },
+    }).pipe(
+      Layer.provide(
+        OpenAiClient.layer({
+          apiKey: openCode.apiKey,
+          apiUrl: `${openCode.url}`,
+          transformClient: (client) =>
+            HttpClient.mapRequestInput(client, (request) =>
+              HttpClientRequest.setHeader(request, 'x-opencode-session', crypto.randomUUID()),
+            ),
+        }),
+      ),
+    )
 
     const database = Database.layer(databasePath)
     const events = WatchdogEvents.layer
-    const repository = MonitorRepository.layer.pipe(Layer.provide(database))
-    const targets = NotificationTargetRepository.layer.pipe(Layer.provide(database))
+    const monitorRespository = MonitorRepository.layer.pipe(Layer.provide(database))
+    const targetRepository = NotificationTargetRepository.layer.pipe(Layer.provide(database))
     const mattermost = Mattermost.layer(mattermostConfig)
-
-    const streams = MonitorStreams.layer.pipe(
-      Layer.provide(events),
-      Layer.provide(repository),
-      Layer.provide(CheckUptime.layer),
+    const scheduleModel = CronConversion.layer.pipe(
+      Layer.provide(lm),
       Layer.provide(BunHttpClient.layer),
     )
 
+    const streams = MonitorStreams.layer.pipe(
+      Layer.provide(events),
+      Layer.provide(monitorRespository),
+      Layer.provide(CheckUptime.layer),
+      Layer.provide(BunHttpClient.layer),
+    )
     const worker = NotificationWorker.layer.pipe(Layer.provide(events), Layer.provide(mattermost))
 
     const api = MonitorApi.layer.pipe(
-      Layer.provide(events),
-      Layer.provide(repository),
-      Layer.provide(targets),
-      Layer.provide(mattermost),
+      Layer.provide(
+        Layer.mergeAll(events, monitorRespository, targetRepository, mattermost, scheduleModel),
+      ),
     )
     const webApp = HttpStaticServer.layer({ root: staticRoot, spa: true })
     const served = HttpRouter.serve(Layer.mergeAll(webApp, api)).pipe(

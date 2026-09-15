@@ -1,24 +1,39 @@
 import { BunHttpServer } from '@effect/platform-bun'
 import {
   Api,
+  DescriptionNotConvertible,
   type MattermostUser,
   MattermostUnavailable,
   MattermostUserNotFound,
   MonitorDefinition,
+  ProviderUnavailable,
+  TokensExhausted,
 } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
 import { Cron, Effect, Layer, Ref, Schema } from 'effect'
 import { HttpRouter } from 'effect/unstable/http'
 import { HttpApiTest } from 'effect/unstable/httpapi'
 import * as Database from './Database'
+import { CronConversion, type Interface as CronConversionInterface } from './CronConversion'
 import { Mattermost } from './Mattermost'
 import type { Interface as MattermostInterface } from './Mattermost'
 import * as MonitorApi from './MonitorApi'
+import { ScheduleGroupLive } from './ScheduleApi'
 import { layer as monitorRepositoryLayer } from './MonitorRepository'
 import { layer as notificationTargetRepositoryLayer } from './NotificationTargetRepository'
 import * as WatchdogEvents from './WatchdogEvents'
 
 const dependencies = Layer.provideMerge(BunHttpServer.layerHttpServices)
+
+const cronConversionStub = (
+  overrides: Partial<CronConversionInterface> = {},
+): Layer.Layer<CronConversion> => {
+  const cron = Cron.parseUnsafe('*/5 * * * *', 'UTC')
+  const base: CronConversionInterface = {
+    convert: () => Effect.succeed({ cron }),
+  }
+  return Layer.succeed(CronConversion, { ...base, ...overrides })
+}
 
 const mattermostUser: MattermostUser = {
   id: 'mm-jesse',
@@ -66,16 +81,24 @@ const shareDependencies = () => {
 const groupLayer = (overrides: Partial<MattermostInterface> = {}) => {
   const { events, monitors, targets } = shareDependencies()
 
-  return Layer.mergeAll(MonitorApi.MonitorGroupLive, MonitorApi.NotificationGroupLive).pipe(
+  return Layer.mergeAll(
+    MonitorApi.MonitorGroupLive,
+    MonitorApi.NotificationGroupLive,
+    ScheduleGroupLive,
+  ).pipe(
     Layer.provide(events),
     Layer.provide(monitors),
     Layer.provide(targets),
     Layer.provide(mattermostStub(overrides)),
+    Layer.provide(cronConversionStub()),
     dependencies,
   )
 }
 
-const applicationLayer = (overrides: Partial<MattermostInterface> = {}) => {
+const applicationLayer = (
+  overrides: Partial<MattermostInterface> = {},
+  cronOverrides: Partial<CronConversionInterface> = {},
+) => {
   const { events, monitors, targets } = shareDependencies()
 
   return MonitorApi.layer.pipe(
@@ -83,11 +106,12 @@ const applicationLayer = (overrides: Partial<MattermostInterface> = {}) => {
     Layer.provide(monitors),
     Layer.provide(targets),
     Layer.provide(mattermostStub(overrides)),
+    Layer.provide(cronConversionStub(cronOverrides)),
     dependencies,
   )
 }
 
-const openClient = HttpApiTest.groups(Api, ['monitor', 'notification'])
+const openClient = HttpApiTest.groups(Api, ['monitor', 'notification', 'schedule'])
 
 const definitionJson = {
   name: 'Prod API',
@@ -511,6 +535,98 @@ describe('mattermost notification endpoints', () => {
           searchUsers: () => Effect.fail(new MattermostUnavailable({ message: 'down' })),
         }),
       ),
+    ),
+  )
+})
+
+describe('schedule conversion', () => {
+  const description = 'Every 5 minutes'
+
+  it.effect('converts a schedule description into a cron expression', () =>
+    Effect.gen(function* () {
+      const { schedule } = yield* openClient
+
+      const { cron } = yield* schedule.convertDescription({ payload: { description } })
+
+      expect(Cron.format(cron)).toBe('0-55/5 * * * *')
+    }).pipe(Effect.provide(groupLayer())),
+  )
+
+  it.effect('reports 502 when the provider is unavailable', () =>
+    withWebHandler(
+      applicationLayer(
+        {},
+        {
+          convert: () => Effect.fail(new ProviderUnavailable({ message: ' Gem: down' })),
+        },
+      ),
+      (handler) =>
+        Effect.gen(function* () {
+          const response = yield* request(handler, '/cron', json({ description }))
+
+          expect(response.status).toBe(502)
+        }),
+    ),
+  )
+
+  it.effect('reports 429 when the provider tokens are exhausted', () =>
+    withWebHandler(
+      applicationLayer(
+        {},
+        {
+          convert: () => Effect.fail(new TokensExhausted()),
+        },
+      ),
+      (handler) =>
+        Effect.gen(function* () {
+          const response = yield* request(handler, '/cron', json({ description }))
+
+          expect(response.status).toBe(429)
+        }),
+    ),
+  )
+
+  it.effect('reports 422 when the description cannot be converted', () =>
+    withWebHandler(
+      applicationLayer(
+        {},
+        {
+          convert: () =>
+            Effect.fail(
+              new DescriptionNotConvertible({ description: 'nope', message: 'not schedulable' }),
+            ),
+        },
+      ),
+      (handler) =>
+        Effect.gen(function* () {
+          const response = yield* request(handler, '/cron', json({ description }))
+
+          expect(response.status).toBe(422)
+        }),
+    ),
+  )
+
+  it.effect('rejects a blank description with 400', () =>
+    withWebHandler(applicationLayer(), (handler) =>
+      Effect.gen(function* () {
+        const response = yield* request(handler, '/cron', json({ description: '   ' }))
+
+        expect(response.status).toBe(400)
+      }),
+    ),
+  )
+
+  it.effect('rejects an over-long description with 400', () =>
+    withWebHandler(applicationLayer(), (handler) =>
+      Effect.gen(function* () {
+        const response = yield* request(
+          handler,
+          '/cron',
+          json({ description: 'Every twenty-six seconds'.repeat(20) }),
+        )
+
+        expect(response.status).toBe(400)
+      }),
     ),
   )
 })
