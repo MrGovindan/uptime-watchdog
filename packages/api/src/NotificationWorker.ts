@@ -25,47 +25,58 @@ const targetDeliveries = (
 ): ReadonlyArray<Delivery> =>
   Array.map(targets, (target) => ({ userId: target.mattermostUserId, message }))
 
-const deliveries = (event: WatchdogEvent, healthTargets: ReadonlyArray<NotificationTarget>) =>
-  WatchdogEvent.match(event, {
-    MonitorRegistered: () => [],
-    MonitorUpdated: () => [],
-    MonitorDeleted: ({ monitor, targets }) =>
-      Array.map(targets, (target) => ({
-        userId: target.mattermostUserId,
-        message: NotificationMessages.monitorDeleted(monitor.name),
-      })),
-    NotificationTargetAdded: ({ monitor, target }) => [
-      {
-        userId: target.mattermostUserId,
-        message: NotificationMessages.addedToMonitor(monitor.name),
-      },
-    ],
-    NotificationTargetRemoved: ({ monitor, target }) => [
-      {
-        userId: target.mattermostUserId,
-        message: NotificationMessages.removedFromMonitor(monitor.name),
-      },
-    ],
-    MonitorHealthy: () => [],
-    MonitorDegraded: ({ monitor }) =>
-      targetDeliveries(healthTargets, NotificationMessages.monitorDegraded(monitor.name)),
-    MonitorHealed: ({ monitor }) =>
-      targetDeliveries(healthTargets, NotificationMessages.monitorHealed(monitor.name)),
-  })
-
 const make = Effect.gen(function* () {
   const events = yield* WatchdogEvents
   const mattermost = yield* Mattermost
   const targets = yield* NotificationTargetRepository
 
+  const deliveries = (event: WatchdogEvent): Effect.Effect<ReadonlyArray<Delivery>> =>
+    WatchdogEvent.match(event, {
+      MonitorRegistered: () => Effect.succeed([]),
+      MonitorUpdated: () => Effect.succeed([]),
+      MonitorDeleted: ({ monitor, targets }) =>
+        Effect.succeed(
+          targetDeliveries(targets, NotificationMessages.monitorDeleted(monitor.name)),
+        ),
+      NotificationTargetAdded: ({ monitor, target }) =>
+        Effect.succeed([
+          {
+            userId: target.mattermostUserId,
+            message: NotificationMessages.addedToMonitor(monitor.name),
+          },
+        ]),
+      NotificationTargetRemoved: ({ monitor, target }) =>
+        Effect.succeed([
+          {
+            userId: target.mattermostUserId,
+            message: NotificationMessages.removedFromMonitor(monitor.name),
+          },
+        ]),
+      MonitorHealthy: () => Effect.succeed([]),
+      MonitorDegraded: ({ monitor }) =>
+        targets
+          .list(monitor.id)
+          .pipe(
+            Effect.map((healthTargets) =>
+              targetDeliveries(healthTargets, NotificationMessages.monitorDegraded(monitor.name)),
+            ),
+          ),
+      MonitorHealed: ({ monitor }) =>
+        targets
+          .list(monitor.id)
+          .pipe(
+            Effect.map((healthTargets) =>
+              targetDeliveries(healthTargets, NotificationMessages.monitorHealed(monitor.name)),
+            ),
+          ),
+    })
+
   const deliver = (event: WatchdogEvent): Effect.Effect<void> =>
-    (event._tag === 'MonitorDegraded' || event._tag === 'MonitorHealed'
-      ? targets.list(event.monitor.id)
-      : Effect.succeed([])
-    ).pipe(
-      Effect.flatMap((healthTargets) =>
+    deliveries(event).pipe(
+      Effect.catchCause((cause) => Effect.logWarning(cause).pipe(Effect.as([]))),
+      Effect.flatMap((deliveriesForEvent) =>
         Effect.forEach(
-          deliveries(event, healthTargets),
+          deliveriesForEvent,
           (delivery) =>
             mattermost.sendDirectMessage(delivery.userId, delivery.message).pipe(
               Effect.retry(retrySchedule),

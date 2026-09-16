@@ -20,7 +20,6 @@ import * as NotificationMessages from './NotificationMessages'
 import { layer as notificationTargetRepositoryLayer } from './NotificationTargetRepository'
 import * as NotificationWorker from './NotificationWorker'
 import * as WatchdogEvents from './WatchdogEvents'
-import { WatchdogEvents as WatchdogEventsService } from './WatchdogEvents'
 
 type SentMessage = Readonly<{ userId: string; message: string }>
 
@@ -87,6 +86,21 @@ const makeLayers = (overrides: Partial<MattermostInterface> = {}) => {
   return { layer: Layer.provideMerge(Layer.merge(groups, worker), events), messages }
 }
 
+const healthyHealth = {
+  _tag: 'Healthy' as const,
+  time: DateTime.nowUnsafe(),
+  response: { duration: Duration.millis(5), status: 200, body: 'ok' },
+}
+
+const degradedHealth = {
+  _tag: 'Degraded' as const,
+  time: DateTime.nowUnsafe(),
+  reason: {
+    _tag: 'Unexpected' as const,
+    response: { duration: Duration.millis(5), status: 500, body: 'oops' },
+  },
+}
+
 const addTarget = (monitorId: MonitorId) =>
   Effect.gen(function* () {
     const { monitor } = yield* openClient
@@ -94,6 +108,15 @@ const addTarget = (monitorId: MonitorId) =>
       params: { monitorId },
       payload: { mattermostUserId: mattermostUser.id },
     })
+  })
+
+const registerWithTarget = (messages: Queue.Queue<SentMessage>) =>
+  Effect.gen(function* () {
+    const { monitor } = yield* openClient
+    const created = yield* monitor.register({ payload: definition })
+    yield* addTarget(created.id)
+    yield* Queue.take(messages)
+    return created
   })
 
 describe('NotificationWorker', () => {
@@ -166,23 +189,13 @@ describe('NotificationWorker', () => {
     const { layer, messages } = makeLayers()
 
     return Effect.gen(function* () {
-      const { monitor } = yield* openClient
-      const created = yield* monitor.register({ payload: definition })
-      yield* addTarget(created.id)
-      yield* Queue.take(messages)
+      const created = yield* registerWithTarget(messages)
 
-      const events = yield* WatchdogEventsService
+      const events = yield* WatchdogEvents.WatchdogEvents
       yield* events.publish({
         _tag: 'MonitorDegraded',
         monitor: created,
-        health: {
-          _tag: 'Degraded',
-          time: DateTime.nowUnsafe(),
-          reason: {
-            _tag: 'Unexpected',
-            response: { duration: Duration.millis(5), status: 500, body: 'oops' },
-          },
-        },
+        health: degradedHealth,
       })
       yield* Effect.yieldNow
 
@@ -198,34 +211,15 @@ describe('NotificationWorker', () => {
     const { layer, messages } = makeLayers()
 
     return Effect.gen(function* () {
-      const { monitor } = yield* openClient
-      const created = yield* monitor.register({ payload: definition })
-      yield* addTarget(created.id)
-      yield* Queue.take(messages)
+      const created = yield* registerWithTarget(messages)
 
-      const events = yield* WatchdogEventsService
+      const events = yield* WatchdogEvents.WatchdogEvents
 
-      yield* events.publish({
-        _tag: 'MonitorHealthy',
-        monitor: created,
-        health: {
-          _tag: 'Healthy',
-          time: DateTime.nowUnsafe(),
-          response: { duration: Duration.millis(5), status: 200, body: 'ok' },
-        },
-      })
+      yield* events.publish({ _tag: 'MonitorHealthy', monitor: created, health: healthyHealth })
       yield* Effect.yieldNow
       expect(Option.isNone(yield* Queue.poll(messages))).toBe(true)
 
-      yield* events.publish({
-        _tag: 'MonitorHealed',
-        monitor: created,
-        health: {
-          _tag: 'Healthy',
-          time: DateTime.nowUnsafe(),
-          response: { duration: Duration.millis(5), status: 200, body: 'ok' },
-        },
-      })
+      yield* events.publish({ _tag: 'MonitorHealed', monitor: created, health: healthyHealth })
       yield* Effect.yieldNow
       expect(yield* Queue.take(messages)).toEqual({
         userId: mattermostUser.id,
@@ -241,18 +235,11 @@ describe('NotificationWorker', () => {
       const { monitor } = yield* openClient
       const created = yield* monitor.register({ payload: definition })
 
-      const events = yield* WatchdogEventsService
+      const events = yield* WatchdogEvents.WatchdogEvents
       yield* events.publish({
         _tag: 'MonitorDegraded',
         monitor: created,
-        health: {
-          _tag: 'Degraded',
-          time: DateTime.nowUnsafe(),
-          reason: {
-            _tag: 'Unexpected',
-            response: { duration: Duration.millis(5), status: 500, body: 'oops' },
-          },
-        },
+        health: degradedHealth,
       })
       yield* Effect.yieldNow
 
