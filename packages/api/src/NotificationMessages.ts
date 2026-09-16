@@ -9,4 +9,10 @@ export const removedFromMonitor = (monitorName: MonitorName): string =>
 export const monitorDeleted = (monitorName: MonitorName): string =>
   `The monitor "${monitorName}" was deleted, so you will no longer be notified.`
 
+export const monitorDegraded = (monitorName: MonitorName): string =>
+  `Monitor "${monitorName}" is degraded and is not responding as expected. You'll be notified when it heals.`
+
+export const monitorHealed = (monitorName: MonitorName): string =>
+  `Monitor "${monitorName}" has healed and is responding as expected again.`
+
 export const testForMonitor = (): string => 'This is a test notification from Uptime Watchdog.'

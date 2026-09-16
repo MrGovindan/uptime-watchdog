@@ -1,7 +1,8 @@
-import { type MattermostUserId } from '@uptime-watchdog/common'
-import { Context, Effect, Layer, Schedule, Stream } from 'effect'
+import { type MattermostUserId, type NotificationTarget } from '@uptime-watchdog/common'
+import { Array, Context, Effect, Layer, Schedule, Stream } from 'effect'
 import { Mattermost } from './Mattermost'
 import * as NotificationMessages from './NotificationMessages'
+import { NotificationTargetRepository } from './NotificationTargetRepository'
 import { WatchdogEvent, WatchdogEvents } from './WatchdogEvents'
 
 type Delivery = Readonly<{ userId: MattermostUserId; message: string }>
@@ -18,12 +19,18 @@ const retrySchedule = Schedule.max([Schedule.exponential('200 millis'), Schedule
   Schedule.jittered,
 )
 
-const deliveries = (event: WatchdogEvent): ReadonlyArray<Delivery> =>
+const targetDeliveries = (
+  targets: ReadonlyArray<NotificationTarget>,
+  message: string,
+): ReadonlyArray<Delivery> =>
+  Array.map(targets, (target) => ({ userId: target.mattermostUserId, message }))
+
+const deliveries = (event: WatchdogEvent, healthTargets: ReadonlyArray<NotificationTarget>) =>
   WatchdogEvent.match(event, {
     MonitorRegistered: () => [],
     MonitorUpdated: () => [],
     MonitorDeleted: ({ monitor, targets }) =>
-      targets.map((target) => ({
+      Array.map(targets, (target) => ({
         userId: target.mattermostUserId,
         message: NotificationMessages.monitorDeleted(monitor.name),
       })),
@@ -40,23 +47,33 @@ const deliveries = (event: WatchdogEvent): ReadonlyArray<Delivery> =>
       },
     ],
     MonitorHealthy: () => [],
-    MonitorDegraded: () => [],
-    MonitorHealed: () => [],
+    MonitorDegraded: ({ monitor }) =>
+      targetDeliveries(healthTargets, NotificationMessages.monitorDegraded(monitor.name)),
+    MonitorHealed: ({ monitor }) =>
+      targetDeliveries(healthTargets, NotificationMessages.monitorHealed(monitor.name)),
   })
 
 const make = Effect.gen(function* () {
   const events = yield* WatchdogEvents
   const mattermost = yield* Mattermost
+  const targets = yield* NotificationTargetRepository
 
   const deliver = (event: WatchdogEvent): Effect.Effect<void> =>
-    Effect.forEach(
-      deliveries(event),
-      (delivery) =>
-        mattermost.sendDirectMessage(delivery.userId, delivery.message).pipe(
-          Effect.retry(retrySchedule),
-          Effect.catchCause((cause) => Effect.logWarning(cause)),
+    (event._tag === 'MonitorDegraded' || event._tag === 'MonitorHealed'
+      ? targets.list(event.monitor.id)
+      : Effect.succeed([])
+    ).pipe(
+      Effect.flatMap((healthTargets) =>
+        Effect.forEach(
+          deliveries(event, healthTargets),
+          (delivery) =>
+            mattermost.sendDirectMessage(delivery.userId, delivery.message).pipe(
+              Effect.retry(retrySchedule),
+              Effect.catchCause((cause) => Effect.logWarning(cause)),
+            ),
+          { discard: true },
         ),
-      { discard: true },
+      ),
     )
 
   yield* events.stream.pipe(Stream.runForEach(deliver), Effect.forkScoped)

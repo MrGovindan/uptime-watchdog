@@ -56,7 +56,11 @@ const application = Layer.unwrap(
       Layer.provide(CheckUptime.layer),
       Layer.provide(BunHttpClient.layer),
     )
-    const worker = NotificationWorker.layer.pipe(Layer.provide(events), Layer.provide(mattermost))
+    const worker = NotificationWorker.layer.pipe(
+      Layer.provide(events),
+      Layer.provide(mattermost),
+      Layer.provide(targetRepository),
+    )
     const status = MonitorHealth.layer.pipe(Layer.provide(streams), Layer.provide(events))
 
     const api = MonitorApi.layer.pipe(

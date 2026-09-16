@@ -8,7 +8,7 @@ import {
   type MonitorId,
 } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
-import { Effect, Layer, Option, Queue, Schema } from 'effect'
+import { DateTime, Duration, Effect, Layer, Option, Queue, Schema } from 'effect'
 import { HttpApiTest } from 'effect/unstable/httpapi'
 import * as Database from './Database'
 import { Mattermost } from './Mattermost'
@@ -20,6 +20,7 @@ import * as NotificationMessages from './NotificationMessages'
 import { layer as notificationTargetRepositoryLayer } from './NotificationTargetRepository'
 import * as NotificationWorker from './NotificationWorker'
 import * as WatchdogEvents from './WatchdogEvents'
+import { WatchdogEvents as WatchdogEventsService } from './WatchdogEvents'
 
 type SentMessage = Readonly<{ userId: string; message: string }>
 
@@ -77,9 +78,13 @@ const makeLayers = (overrides: Partial<MattermostInterface> = {}) => {
     Layer.provide(MonitorHealthAbsent),
     dependencies,
   )
-  const worker = NotificationWorker.layer.pipe(Layer.provide(events), Layer.provide(mattermost))
+  const worker = NotificationWorker.layer.pipe(
+    Layer.provide(events),
+    Layer.provide(mattermost),
+    Layer.provide(targets),
+  )
 
-  return { layer: Layer.merge(groups, worker), messages }
+  return { layer: Layer.provideMerge(Layer.merge(groups, worker), events), messages }
 }
 
 const addTarget = (monitorId: MonitorId) =>
@@ -154,6 +159,104 @@ describe('NotificationWorker', () => {
         userId: mattermostUser.id,
         message: NotificationMessages.monitorDeleted('Prod API'),
       })
+    }).pipe(Effect.provide(layer))
+  })
+
+  it.effect('notifies targets when a monitor becomes degraded', () => {
+    const { layer, messages } = makeLayers()
+
+    return Effect.gen(function* () {
+      const { monitor } = yield* openClient
+      const created = yield* monitor.register({ payload: definition })
+      yield* addTarget(created.id)
+      yield* Queue.take(messages)
+
+      const events = yield* WatchdogEventsService
+      yield* events.publish({
+        _tag: 'MonitorDegraded',
+        monitor: created,
+        health: {
+          _tag: 'Degraded',
+          time: DateTime.nowUnsafe(),
+          reason: {
+            _tag: 'Unexpected',
+            response: { duration: Duration.millis(5), status: 500, body: 'oops' },
+          },
+        },
+      })
+      yield* Effect.yieldNow
+
+      expect(yield* Queue.take(messages)).toEqual({
+        userId: mattermostUser.id,
+        message: NotificationMessages.monitorDegraded('Prod API'),
+      })
+      expect(Option.isNone(yield* Queue.poll(messages))).toBe(true)
+    }).pipe(Effect.provide(layer))
+  })
+
+  it.effect('notifies targets when a monitor heals and not for steady health', () => {
+    const { layer, messages } = makeLayers()
+
+    return Effect.gen(function* () {
+      const { monitor } = yield* openClient
+      const created = yield* monitor.register({ payload: definition })
+      yield* addTarget(created.id)
+      yield* Queue.take(messages)
+
+      const events = yield* WatchdogEventsService
+
+      yield* events.publish({
+        _tag: 'MonitorHealthy',
+        monitor: created,
+        health: {
+          _tag: 'Healthy',
+          time: DateTime.nowUnsafe(),
+          response: { duration: Duration.millis(5), status: 200, body: 'ok' },
+        },
+      })
+      yield* Effect.yieldNow
+      expect(Option.isNone(yield* Queue.poll(messages))).toBe(true)
+
+      yield* events.publish({
+        _tag: 'MonitorHealed',
+        monitor: created,
+        health: {
+          _tag: 'Healthy',
+          time: DateTime.nowUnsafe(),
+          response: { duration: Duration.millis(5), status: 200, body: 'ok' },
+        },
+      })
+      yield* Effect.yieldNow
+      expect(yield* Queue.take(messages)).toEqual({
+        userId: mattermostUser.id,
+        message: NotificationMessages.monitorHealed('Prod API'),
+      })
+    }).pipe(Effect.provide(layer))
+  })
+
+  it.effect('sends nothing for degradation when the monitor has no targets', () => {
+    const { layer, messages } = makeLayers()
+
+    return Effect.gen(function* () {
+      const { monitor } = yield* openClient
+      const created = yield* monitor.register({ payload: definition })
+
+      const events = yield* WatchdogEventsService
+      yield* events.publish({
+        _tag: 'MonitorDegraded',
+        monitor: created,
+        health: {
+          _tag: 'Degraded',
+          time: DateTime.nowUnsafe(),
+          reason: {
+            _tag: 'Unexpected',
+            response: { duration: Duration.millis(5), status: 500, body: 'oops' },
+          },
+        },
+      })
+      yield* Effect.yieldNow
+
+      expect(Option.isNone(yield* Queue.poll(messages))).toBe(true)
     }).pipe(Effect.provide(layer))
   })
 
