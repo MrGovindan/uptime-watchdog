@@ -57,7 +57,9 @@ const run = <A, E>(effect: Effect.Effect<A, E, ApiClient>, client: HttpClient.Ht
 describe('ListMonitors', () => {
   test('decodes the monitor list on success', async () => {
     const client = HttpClient.make((request) =>
-      Effect.sync(() => jsonResponse(request, 200, [monitorJson])),
+      Effect.sync(() =>
+        jsonResponse(request, 200, [{ monitor: monitorJson, status: { _tag: 'None' } }]),
+      ),
     )
 
     const message = await run(ListMonitors().effect, client)

@@ -8,6 +8,7 @@ import * as Database from './Database'
 import * as Mattermost from './Mattermost'
 import * as MonitorApi from './MonitorApi'
 import * as MonitorRepository from './MonitorRepository'
+import * as MonitorStatus from './MonitorStatusService'
 import * as MonitorStreams from './MonitorStreams'
 import * as NotificationTargetRepository from './NotificationTargetRepository'
 import * as NotificationWorker from './NotificationWorker'
@@ -56,11 +57,13 @@ const application = Layer.unwrap(
       Layer.provide(BunHttpClient.layer),
     )
     const worker = NotificationWorker.layer.pipe(Layer.provide(events), Layer.provide(mattermost))
+    const status = MonitorStatus.layer.pipe(Layer.provide(streams), Layer.provide(events))
 
     const api = MonitorApi.layer.pipe(
       Layer.provide(
         Layer.mergeAll(events, monitorRespository, targetRepository, mattermost, scheduleModel),
       ),
+      Layer.provide(status),
     )
     const webApp = HttpStaticServer.layer({ root: staticRoot, spa: true })
     const served = HttpRouter.serve(Layer.mergeAll(webApp, api)).pipe(
@@ -69,7 +72,7 @@ const application = Layer.unwrap(
 
     // Building the streams and worker layers subscribes them to the event bus,
     // so sequence them before the server accepts requests.
-    const background = Layer.merge(streams, worker)
+    const background = Layer.mergeAll(streams, worker, status)
     const server = background.pipe(Layer.flatMap(() => served))
 
     const logging = Layer.effectDiscard(

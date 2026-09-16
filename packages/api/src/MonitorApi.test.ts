@@ -6,18 +6,34 @@ import {
   MattermostUnavailable,
   MattermostUserNotFound,
   MonitorDefinition,
+  type MonitorObservation,
   ProviderUnavailable,
   TokensExhausted,
+  MonitorId,
 } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
-import { Cron, Effect, Layer, Ref, Schema } from 'effect'
+import {
+  Cron,
+  DateTime,
+  Duration,
+  Effect,
+  Layer,
+  Option,
+  Queue,
+  Ref,
+  Result,
+  Schema,
+  Stream,
+} from 'effect'
 import { HttpRouter } from 'effect/unstable/http'
 import { HttpApiTest } from 'effect/unstable/httpapi'
 import * as Database from './Database'
 import { CronConversion, type Interface as CronConversionInterface } from './CronConversion'
+import { layer as monitorStatusLayer } from './MonitorStatusService'
 import { Mattermost } from './Mattermost'
 import type { Interface as MattermostInterface } from './Mattermost'
 import * as MonitorApi from './MonitorApi'
+import * as MonitorStreams from './MonitorStreams'
 import { ScheduleGroupLive } from './ScheduleApi'
 import { layer as monitorRepositoryLayer } from './MonitorRepository'
 import { layer as notificationTargetRepositoryLayer } from './NotificationTargetRepository'
@@ -70,16 +86,24 @@ const mattermostStub = (overrides: Partial<MattermostInterface> = {}): Layer.Lay
 const shareDependencies = () => {
   const database = Database.layer(':memory:')
   const events = WatchdogEvents.layer
+  const observationQueue = Effect.runSync(Queue.unbounded<MonitorObservation>())
+  const streamsStub = Layer.succeed(MonitorStreams.MonitorStreams, {
+    start: () => Effect.void,
+    observations: Stream.fromQueue(observationQueue),
+  })
+  const status = monitorStatusLayer.pipe(Layer.provide(streamsStub), Layer.provide(events))
 
   return {
     events,
     monitors: monitorRepositoryLayer.pipe(Layer.provide(database)),
     targets: notificationTargetRepositoryLayer.pipe(Layer.provide(database)),
+    status,
+    observationQueue,
   }
 }
 
 const groupLayer = (overrides: Partial<MattermostInterface> = {}) => {
-  const { events, monitors, targets } = shareDependencies()
+  const { events, monitors, targets, status } = shareDependencies()
 
   return Layer.mergeAll(
     MonitorApi.MonitorGroupLive,
@@ -91,6 +115,7 @@ const groupLayer = (overrides: Partial<MattermostInterface> = {}) => {
     Layer.provide(targets),
     Layer.provide(mattermostStub(overrides)),
     Layer.provide(cronConversionStub()),
+    Layer.provide(status),
     dependencies,
   )
 }
@@ -99,7 +124,7 @@ const applicationLayer = (
   overrides: Partial<MattermostInterface> = {},
   cronOverrides: Partial<CronConversionInterface> = {},
 ) => {
-  const { events, monitors, targets } = shareDependencies()
+  const { events, monitors, targets, status } = shareDependencies()
 
   return MonitorApi.layer.pipe(
     Layer.provide(events),
@@ -107,6 +132,7 @@ const applicationLayer = (
     Layer.provide(targets),
     Layer.provide(mattermostStub(overrides)),
     Layer.provide(cronConversionStub(cronOverrides)),
+    Layer.provide(status),
     dependencies,
   )
 }
@@ -176,14 +202,15 @@ describe('monitor registration', () => {
     }).pipe(Effect.provide(groupLayer())),
   )
 
-  it.effect('lists registered monitors', () =>
+  it.effect('lists registered monitors as pending before any observation', () =>
     Effect.gen(function* () {
       const { monitor } = yield* openClient
 
       const created = yield* monitor.register({ payload: definition })
       const monitors = yield* monitor.list({})
 
-      expect(monitors).toEqual([created])
+      expect(Option.isNone(monitors[0]!.status)).toBe(true)
+      expect(monitors[0]).toMatchObject({ monitor: created })
     }).pipe(Effect.provide(groupLayer())),
   )
 
@@ -255,7 +282,8 @@ describe('monitor update', () => {
       expect(updated.createdAt).toEqual(created.createdAt)
 
       const monitors = yield* monitor.list({})
-      expect(monitors).toEqual([updated])
+      expect(Option.isNone(monitors[0]!.status)).toBe(true)
+      expect(monitors[0]).toMatchObject({ monitor: updated })
     }).pipe(Effect.provide(groupLayer())),
   )
 
@@ -507,7 +535,127 @@ describe('mattermost notification endpoints', () => {
       ),
     )
   })
+})
 
+describe('monitor status', () => {
+  const applicationLayerQueued = () => {
+    const deps = shareDependencies()
+
+    return {
+      layer: MonitorApi.layer.pipe(
+        Layer.provide(deps.events),
+        Layer.provide(deps.monitors),
+        Layer.provide(deps.targets),
+        Layer.provide(mattermostStub()),
+        Layer.provide(cronConversionStub()),
+        Layer.provide(deps.status),
+        dependencies,
+      ),
+      observations: deps.observationQueue,
+    }
+  }
+
+  const successObservation = (monitorId: MonitorId): MonitorObservation =>
+    ({
+      monitorId,
+      monitorName: 'Prod API',
+      observation: {
+        time: DateTime.nowUnsafe(),
+        response: Result.succeed({ duration: Duration.millis(5), status: 200, body: 'pong' }),
+      },
+    }) as MonitorObservation
+
+  const waitFor = <A>(
+    effect: Effect.Effect<A>,
+    predicate: (value: A) => boolean,
+    attemptsLeft = 1000,
+  ): Effect.Effect<A> =>
+    Effect.flatMap(effect, (value) =>
+      predicate(value)
+        ? Effect.succeed(value)
+        : attemptsLeft > 0
+          ? Effect.flatMap(Effect.yieldNow, () => waitFor(effect, predicate, attemptsLeft - 1))
+          : Effect.die('waitFor exceeded'),
+    )
+
+  type Listed = { monitor: { id: string }; status: { _tag: string; value?: unknown } }
+
+  const listMonitorsViaHttp = (handler: (req: Request) => Promise<Response>) =>
+    Effect.gen(function* () {
+      const response = yield* request(handler, '/monitor')
+      expect(response.status).toBe(200)
+      return (yield* Effect.promise(() => response.json())) as Array<Listed>
+    })
+
+  it.effect('reports status from the observation stream', () =>
+    Effect.gen(function* () {
+      const { layer, observations } = applicationLayerQueued()
+
+      return yield* withWebHandler(layer, (handler) =>
+        Effect.gen(function* () {
+          const monitorId = yield* registerViaHttp(handler)
+
+          const pending = yield* listMonitorsViaHttp(handler)
+          expect(pending).toHaveLength(1)
+          expect(pending[0]).toMatchObject({
+            monitor: { id: monitorId },
+            status: { _tag: 'None' },
+          })
+
+          yield* Queue.offer(observations, successObservation(MonitorId.make(monitorId)))
+
+          const [observed] = yield* waitFor(
+            listMonitorsViaHttp(handler),
+            (monitors) => monitors.length === 1 && monitors[0]!.status._tag === 'Some',
+          )
+          expect(observed!.monitor.id).toBe(monitorId)
+          expect(observed!.status.value).toMatchObject({
+            outcome: { _tag: 'Success', response: { status: 200 } },
+          })
+        }),
+      )
+    }),
+  )
+
+  it.effect('keeps other monitors pending and drops deleted monitors', () =>
+    Effect.gen(function* () {
+      const { layer, observations } = applicationLayerQueued()
+
+      return yield* withWebHandler(layer, (handler) =>
+        Effect.gen(function* () {
+          const firstId = yield* registerViaHttp(handler)
+          const secondId = yield* registerViaHttp(handler)
+
+          yield* Queue.offer(observations, successObservation(MonitorId.make(firstId)))
+
+          const listed = yield* waitFor(listMonitorsViaHttp(handler), (monitors) =>
+            monitors.some((entry) => entry.monitor.id === firstId && entry.status._tag === 'Some'),
+          )
+          const firstMonitored = listed.find((entry) => entry.monitor.id === firstId)
+          const secondMonitored = listed.find((entry) => entry.monitor.id === secondId)
+          expect(firstMonitored).toMatchObject({
+            monitor: { id: firstId },
+            status: { _tag: 'Some', value: { outcome: { _tag: 'Success' } } },
+          })
+          expect(secondMonitored).toMatchObject({
+            monitor: { id: secondId },
+            status: { _tag: 'None' },
+          })
+
+          const deleted = yield* request(handler, `/monitor/${firstId}`, { method: 'DELETE' })
+          expect(deleted.status).toBe(204)
+
+          const after = yield* listMonitorsViaHttp(handler)
+          expect(after).toHaveLength(1)
+          expect(after[0]!.monitor.id).toBe(secondId)
+          expect(after[0]!.status._tag).toBe('None')
+        }),
+      )
+    }),
+  )
+})
+
+describe('mattermost extra notification endpoints', () => {
   it.effect('surfaces a mattermost user that does not exist', () =>
     Effect.gen(function* () {
       const { notification } = yield* openClient

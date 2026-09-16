@@ -1,5 +1,6 @@
 export * from './Mattermost'
 export * from './Monitor'
 export * from './MonitorApi'
+export * from './MonitorStatus'
 export * from './NotificationTarget'
 export * from './Uptime'

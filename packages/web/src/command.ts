@@ -1,5 +1,5 @@
 import { MonitorDefinition, MonitorId } from '@uptime-watchdog/common'
-import { Effect } from 'effect'
+import { Array, Effect } from 'effect'
 import { Command } from 'foldkit'
 
 import { ApiClient } from './apiClient'
@@ -13,7 +13,7 @@ export const ListMonitors = Command.define('ListMonitors', {
   execute: Effect.gen(function* () {
     const client = yield* ApiClient
     const monitors = yield* client.monitor.list()
-    return Message.CompletedListMonitors({ monitors })
+    return Message.CompletedListMonitors({ monitors: Array.map(monitors, (each) => each.monitor) })
   }).pipe(
     Effect.catch((error) =>
       Effect.succeed(Message.FailedListMonitors({ error: describeError(error) })),
