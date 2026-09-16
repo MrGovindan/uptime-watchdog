@@ -12,6 +12,7 @@ export default defineConfig({
     proxy: {
       '/monitor': 'http://localhost:3000',
       '/notification': 'http://localhost:3000',
+      '/cron': 'http://localhost:3000',
     },
   },
 })

@@ -50,11 +50,13 @@ export const fieldInput = (
     description?: string
     error?: string
     counter?: Readonly<{ text: string; isInvalid: boolean }>
+    labelExtra?: Html
   }>,
 ): Html => {
   const description = options?.description
   const error = options?.error
   const counter = options?.counter
+  const labelExtra = options?.labelExtra
   const isInvalid = field._tag === 'Invalid' || error !== undefined
 
   return Input.view(
@@ -73,14 +75,20 @@ export const fieldInput = (
               [h.Class('flex items-center justify-between')],
               [
                 h.label([...attributes.label, h.Class(LABEL_CLASS)], [labelText]),
-                ...(counter === undefined
-                  ? []
-                  : [
-                      h.span(
-                        [h.Class(counter.isInvalid ? ERROR_CLASS : HELPER_CLASS)],
-                        [counter.text],
-                      ),
-                    ]),
+                h.span(
+                  [h.Class('flex items-center gap-3')],
+                  [
+                    ...(counter === undefined
+                      ? []
+                      : [
+                          h.span(
+                            [h.Class(counter.isInvalid ? ERROR_CLASS : HELPER_CLASS)],
+                            [counter.text],
+                          ),
+                        ]),
+                    ...(labelExtra === undefined ? [] : [labelExtra]),
+                  ],
+                ),
               ],
             ),
             h.input([...attributes.input, h.Class(inputClass(isInvalid))]),

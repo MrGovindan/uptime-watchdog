@@ -3,6 +3,7 @@ import { Dialog } from '@foldkit/ui'
 import { Option, Schema } from 'effect'
 import { AsyncData } from 'foldkit'
 
+import * as CronHelp from './cronHelp'
 import * as NotificationTargets from './notificationTargets'
 import { Form, makeInitialForm } from './monitorForm'
 import { Toast } from './toast'
@@ -17,6 +18,7 @@ export const Model = Schema.Struct({
   deleteDialog: Dialog.Model,
   maybeDeleteMonitor: Schema.Option(Monitor),
   notificationTargets: NotificationTargets.Model,
+  cronHelp: CronHelp.Model,
   toast: Toast.Model,
 })
 export type Model = typeof Model.Type
@@ -29,5 +31,6 @@ export const makeInitialModel = (): Model => ({
   deleteDialog: Dialog.init({ id: 'delete-monitor-dialog' }),
   maybeDeleteMonitor: Option.none(),
   notificationTargets: NotificationTargets.init().model,
+  cronHelp: CronHelp.init().model,
   toast: Toast.init({ id: 'app-toast' }),
 })

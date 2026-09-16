@@ -143,10 +143,20 @@ export const addMonitorForm = (
         (value) => Message.UpdatedCronSchedule({ value }),
         'text',
         h,
-        Option.match(parseCron(model.form.cronSchedule.value), {
-          onNone: () => ({ error: 'Enter a valid cron expression' }),
-          onSome: (cron) => ({ description: describeCron(cron) }),
-        }),
+        {
+          ...Option.match(parseCron(model.form.cronSchedule.value), {
+            onNone: () => ({ error: 'Enter a valid cron expression' }),
+            onSome: (cron) => ({ description: describeCron(cron) }),
+          }),
+          labelExtra: h.button(
+            [
+              h.Class('cursor-pointer text-xs text-gray-400 underline hover:text-gray-600'),
+              h.Type('button'),
+              h.OnClick(Message.ClickedOpenCronHelp()),
+            ],
+            ['Need help with this?'],
+          ),
+        },
       ),
       headersInput(model.form, h),
       h.div(

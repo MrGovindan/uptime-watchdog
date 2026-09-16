@@ -3,6 +3,7 @@ import { Dialog } from '@foldkit/ui'
 import { Schema } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
 
+import * as CronHelp from './cronHelp'
 import * as NotificationTargets from './notificationTargets'
 import { Toast } from './toast'
 
@@ -44,6 +45,9 @@ export const Message = defineMessageUnion({
 
   ClickedOpenNotificationTargets: { monitorId: MonitorId, monitorName: MonitorName },
   GotNotificationTargetsMessage: { message: NotificationTargets.Message },
+
+  ClickedOpenCronHelp: {},
+  GotCronHelpMessage: { message: CronHelp.Message },
 
   GotToastMessage: { message: Toast.Message },
 })

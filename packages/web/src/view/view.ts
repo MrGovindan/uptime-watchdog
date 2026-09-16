@@ -1,11 +1,20 @@
-import type { Document, HtmlBuilder } from 'foldkit/html'
+import type { Document, Html, HtmlBuilder } from 'foldkit/html'
 
 import { APP_NAME } from '../constant'
+import * as CronHelp from '../cronHelp'
 import { Message } from '../message'
 import type { Model } from '../model'
 import { addMonitorDialog, deleteMonitorDialog } from './dialogs'
 import { primaryButton } from './field'
 import { monitorsSection, notificationTargetsView, toastView } from './monitors'
+
+const cronHelpView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.submodel({
+    slotId: model.cronHelp.dialog.id,
+    model: model.cronHelp,
+    view: CronHelp.view,
+    toParentMessage: (message) => Message.GotCronHelpMessage({ message }),
+  })
 
 export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
   title: APP_NAME,
@@ -34,6 +43,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       addMonitorDialog(model, h),
       deleteMonitorDialog(model, h),
       notificationTargetsView(model, h),
+      cronHelpView(model, h),
       toastView(model, h),
     ],
   ),

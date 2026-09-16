@@ -1,8 +1,11 @@
 import { Dialog } from '@foldkit/ui'
 import { Option } from 'effect'
 import { Update } from 'foldkit'
+import { NotValidated } from 'foldkit/fieldValidation'
 import { evo } from 'foldkit/struct'
 
+import { ApiClient } from './apiClient'
+import * as CronHelp from './cronHelp'
 import { Message } from './message'
 import * as NotificationTargets from './notificationTargets'
 import { makeInitialForm } from './monitorForm'
@@ -87,6 +90,74 @@ export const foldCloseDeleteMonitorDialog = Update.foldChildStep({
   write: writeDeleteDialog,
   toParentMessage: toDeleteMonitorDialogMessage,
   foldOutMessage: foldDeleteMonitorDialogOutMessage,
+})
+
+// CRON HELP DIALOG
+
+const readCronHelp = (model: Model) => Option.some(model.cronHelp)
+const writeCronHelp = (model: Model, nextCronHelp: CronHelp.Model): Model =>
+  evo(model, { cronHelp: () => nextCronHelp })
+const toCronHelpMessage = (message: CronHelp.Message): Message =>
+  Message.GotCronHelpMessage({ message })
+
+const readCronHelpDialog = (model: Model) => Option.some(model.cronHelp.dialog)
+const writeCronHelpDialog = (model: Model, nextDialog: Dialog.Model): Model =>
+  evo(model, { cronHelp: (cronHelp) => evo(cronHelp, { dialog: () => nextDialog }) })
+
+const toCronHelpDialogMessage = (message: Dialog.Message): Message =>
+  Message.GotCronHelpMessage({ message: CronHelp.Message.GotDialogMessage({ message }) })
+
+const foldCronHelpDialogOutMessage = Dialog.OutMessage.match<Update.Step<Model, Message>>({
+  Opened: () => (model) => ({ model }),
+  Closed: () => (model) => ({
+    model: evo(model, { cronHelp: CronHelp.resetToEntering }),
+  }),
+})
+
+export const foldCloseCronHelpDialog = Update.foldChildStep({
+  update: Dialog.close,
+  read: readCronHelpDialog,
+  write: writeCronHelpDialog,
+  toParentMessage: toCronHelpDialogMessage,
+  foldOutMessage: foldCronHelpDialogOutMessage,
+})
+
+export const openCronHelpDialog = (model: Model): Update.Return<Model, Message, ApiClient> => {
+  const opened = Update.combine(model, [
+    Update.foldChildStep({
+      update: Dialog.open,
+      read: readCronHelpDialog,
+      write: writeCronHelpDialog,
+      toParentMessage: toCronHelpDialogMessage,
+      foldOutMessage: foldCronHelpDialogOutMessage,
+    }),
+    (nextModel) => ({ model: evo(nextModel, { cronHelp: CronHelp.resetToEntering }) }),
+  ])
+
+  return { model: opened.model, commands: opened.commands ?? [] }
+}
+
+const foldCronHelpOutMessage = CronHelp.OutMessage.match<Update.Step<Model, Message, ApiClient>>({
+  AcceptedCron:
+    ({ cron }) =>
+    (stepModel) => {
+      const closed = foldCloseCronHelpDialog(stepModel)
+
+      return {
+        model: evo(closed.model, {
+          form: (form) => evo(form, { cronSchedule: () => NotValidated({ value: cron }) }),
+        }),
+        commands: closed.commands ?? [],
+      }
+    },
+})
+
+export const foldCronHelp = Update.foldChild({
+  update: CronHelp.update,
+  read: readCronHelp,
+  write: writeCronHelp,
+  toParentMessage: toCronHelpMessage,
+  foldOutMessage: foldCronHelpOutMessage,
 })
 
 // TOAST

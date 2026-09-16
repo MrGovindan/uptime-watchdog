@@ -10,6 +10,7 @@ import {
   foldAddMonitorDialog,
   foldCloseAddMonitorDialog,
   foldCloseDeleteMonitorDialog,
+  foldCronHelp,
   foldDeleteMonitorDialog,
   foldNotificationTargets,
   foldOpenAddMonitorDialog,
@@ -17,6 +18,7 @@ import {
   foldOpenNotificationTargets,
   foldShowToast,
   foldToast,
+  openCronHelpDialog,
   resetForm,
 } from './folds'
 import { Message } from './message'
@@ -273,6 +275,13 @@ export const update = (model: Model, message: Message) =>
 
     GotNotificationTargetsMessage: ({ message: notificationTargetsMessage }) =>
       foldNotificationTargets(model, notificationTargetsMessage),
+
+    ClickedOpenCronHelp: () => {
+      const opened = openCronHelpDialog(model)
+      return { model: opened.model, commands: opened.commands ?? [] }
+    },
+
+    GotCronHelpMessage: ({ message: cronHelpMessage }) => foldCronHelp(model, cronHelpMessage),
 
     GotToastMessage: ({ message: toastMessage }) => foldToast(model, toastMessage),
   })
