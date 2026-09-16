@@ -31,6 +31,7 @@ const definition = Effect.runSync(
       headers: {},
     },
     cronSchedule: '* * * * *',
+    expectedStatus: 200,
   }),
 )
 
@@ -45,6 +46,7 @@ const updatedDefinition = Effect.runSync(
       headers: {},
     },
     cronSchedule: '* * * * *',
+    expectedStatus: 200,
   }),
 )
 
@@ -95,8 +97,8 @@ describe('MonitorStreams', () => {
 
       // Assert
       const [observed] = Array.from(yield* Fiber.join(collected))
-      expect(observed?.monitorId).toBe(created.id)
-      expect(observed?.monitorName).toBe('Prod API')
+      expect(observed?.monitor.id).toBe(created.id)
+      expect(observed?.monitor.name).toBe('Prod API')
       expect(Result.isSuccess(observed!.observation.response)).toBe(true)
     }).pipe(Effect.provide(makeLayers(false))),
   )
@@ -125,9 +127,9 @@ describe('MonitorStreams', () => {
 
       // Assert
       const [first, second] = Array.from(yield* Fiber.join(collected))
-      expect(first?.monitorId).toBe(created.id)
-      expect(first?.monitorName).toBe('Prod API')
-      expect(second?.monitorName).toBe('Renamed API')
+      expect(first?.monitor.id).toBe(created.id)
+      expect(first?.monitor.name).toBe('Prod API')
+      expect(second?.monitor.name).toBe('Renamed API')
     }).pipe(Effect.provide(makeLayers(false))),
   )
 
@@ -150,8 +152,8 @@ describe('MonitorStreams', () => {
 
       // Assert
       const [observed] = Array.from(yield* Fiber.join(collected))
-      expect(observed?.monitorId).toBe(saved?.id)
-      expect(observed?.monitorName).toBe('Prod API')
+      expect(observed?.monitor.id).toBe(saved?.id)
+      expect(observed?.monitor.name).toBe('Prod API')
       expect(Result.isSuccess(observed!.observation.response)).toBe(true)
     }).pipe(Effect.provide(makeLayers(true))),
   )

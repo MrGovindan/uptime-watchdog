@@ -39,6 +39,9 @@ const deliveries = (event: WatchdogEvent): ReadonlyArray<Delivery> =>
         message: NotificationMessages.removedFromMonitor(monitor.name),
       },
     ],
+    MonitorHealthy: () => [],
+    MonitorDegraded: () => [],
+    MonitorHealed: () => [],
   })
 
 const make = Effect.gen(function* () {

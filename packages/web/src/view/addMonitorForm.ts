@@ -158,6 +158,14 @@ export const addMonitorForm = (
           ),
         },
       ),
+      fieldInput(
+        'monitor-expected-status',
+        'Expected status',
+        model.form.expectedStatus,
+        (value) => Message.UpdatedExpectedStatus({ value }),
+        'text',
+        h,
+      ),
       headersInput(model.form, h),
       h.div(
         [h.Class('flex justify-end gap-2 pt-2')],

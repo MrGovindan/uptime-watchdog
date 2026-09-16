@@ -4,7 +4,7 @@ import { HttpApiBuilder } from 'effect/unstable/httpapi'
 import { Mattermost } from './Mattermost'
 import { MonitorRepository } from './MonitorRepository'
 import type { Interface as MonitorRepositoryInterface } from './MonitorRepository'
-import { MonitorStatusService } from './MonitorStatusService'
+import { MonitorHealth } from './MonitorHealth'
 import * as NotificationMessages from './NotificationMessages'
 import { NotificationTargetRepository } from './NotificationTargetRepository'
 import { ScheduleGroupLive } from './ScheduleApi'
@@ -29,7 +29,7 @@ export const MonitorGroupLive = HttpApiBuilder.group(Api, 'monitor', (handlers) 
     const targets = yield* NotificationTargetRepository
     const mattermost = yield* Mattermost
     const events = yield* WatchdogEvents
-    const statuses = yield* MonitorStatusService
+    const health = yield* MonitorHealth
 
     return handlers
       .handle(
@@ -45,7 +45,7 @@ export const MonitorGroupLive = HttpApiBuilder.group(Api, 'monitor', (handlers) 
         repository.list.pipe(
           Effect.map((monitors) =>
             monitors.map((monitor) =>
-              Effect.map(statuses.getStatus(monitor.id), (status) => ({ monitor, status })),
+              Effect.map(health.getHealth(monitor.id), (health) => ({ monitor, health })),
             ),
           ),
           Effect.flatMap(Effect.all),

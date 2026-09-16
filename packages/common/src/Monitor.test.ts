@@ -1,7 +1,14 @@
 import { describe, expect, it } from '@effect/vitest'
 import { Cron, DateTime, Effect, Option, Schema } from 'effect'
 
-import { Monitor, MonitorDefinition, MonitorId, MonitorName } from './Monitor'
+import {
+  EXPECTED_STATUS_MAX,
+  EXPECTED_STATUS_MIN,
+  Monitor,
+  MonitorDefinition,
+  MonitorId,
+  MonitorName,
+} from './Monitor'
 
 const uuid = '2f1c9b3e-4a5d-4f6a-8b7c-1d2e3f4a5b6c'
 
@@ -9,6 +16,7 @@ const definitionJson = {
   name: 'Prod API',
   request: { hostname: 'example.test', port: 8080, protocol: 'https', method: 'GET', headers: {} },
   cronSchedule: '*/5 * * * *',
+  expectedStatus: 200,
 }
 
 const decodeMonitorId = Schema.decodeUnknownEffect(MonitorId)
@@ -27,6 +35,7 @@ const makeInsert = (definition: MonitorDefinition) =>
     name: definition.name,
     request: definition.request,
     cronSchedule: definition.cronSchedule,
+    expectedStatus: definition.expectedStatus,
   })
 
 describe('MonitorId', () => {
@@ -43,6 +52,38 @@ describe('MonitorId', () => {
       const error = yield* decodeMonitorId('not-a-uuid').pipe(Effect.flip)
 
       expect(error).toBeInstanceOf(Schema.SchemaError)
+    }),
+  )
+})
+
+describe('ExpectedStatus', () => {
+  it.effect('accepts a status code within the HTTP range', () =>
+    Effect.gen(function* () {
+      expect(
+        yield* decodeDefinition({ ...definitionJson, expectedStatus: EXPECTED_STATUS_MIN }),
+      ).toMatchObject({ expectedStatus: EXPECTED_STATUS_MIN })
+      expect(
+        yield* decodeDefinition({ ...definitionJson, expectedStatus: EXPECTED_STATUS_MAX }),
+      ).toMatchObject({ expectedStatus: EXPECTED_STATUS_MAX })
+    }),
+  )
+
+  it.effect('rejects a status outside the HTTP range and a missing expectation', () =>
+    Effect.gen(function* () {
+      const { expectedStatus: _omitted, ...withoutExpectedStatus } = definitionJson
+
+      const invalid: ReadonlyArray<unknown> = [
+        { ...definitionJson, expectedStatus: EXPECTED_STATUS_MIN - 1 },
+        { ...definitionJson, expectedStatus: EXPECTED_STATUS_MAX + 1 },
+        { ...definitionJson, expectedStatus: 200.5 },
+        withoutExpectedStatus,
+      ]
+
+      for (const input of invalid) {
+        const error = yield* decodeDefinition(input).pipe(Effect.flip)
+
+        expect(error).toBeInstanceOf(Schema.SchemaError)
+      }
     }),
   )
 })
@@ -146,6 +187,7 @@ describe('Monitor', () => {
         name: 'Prod API',
         request: { ...definitionJson.request, headers: {} },
         cronSchedule: '0-55/5 * * * *',
+        expectedStatus: 200,
         createdAt: '2026-09-13T00:00:00.000Z',
       }
 

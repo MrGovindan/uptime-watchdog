@@ -8,7 +8,7 @@ import * as Database from './Database'
 import * as Mattermost from './Mattermost'
 import * as MonitorApi from './MonitorApi'
 import * as MonitorRepository from './MonitorRepository'
-import * as MonitorStatus from './MonitorStatusService'
+import * as MonitorHealth from './MonitorHealth'
 import * as MonitorStreams from './MonitorStreams'
 import * as NotificationTargetRepository from './NotificationTargetRepository'
 import * as NotificationWorker from './NotificationWorker'
@@ -57,7 +57,7 @@ const application = Layer.unwrap(
       Layer.provide(BunHttpClient.layer),
     )
     const worker = NotificationWorker.layer.pipe(Layer.provide(events), Layer.provide(mattermost))
-    const status = MonitorStatus.layer.pipe(Layer.provide(streams), Layer.provide(events))
+    const status = MonitorHealth.layer.pipe(Layer.provide(streams), Layer.provide(events))
 
     const api = MonitorApi.layer.pipe(
       Layer.provide(

@@ -15,7 +15,7 @@ import { Mattermost } from './Mattermost'
 import type { Interface as MattermostInterface } from './Mattermost'
 import * as MonitorApi from './MonitorApi'
 import { layer as monitorRepositoryLayer } from './MonitorRepository'
-import { MonitorStatusService } from './MonitorStatusService'
+import { MonitorHealth } from './MonitorHealth'
 import * as NotificationMessages from './NotificationMessages'
 import { layer as notificationTargetRepositoryLayer } from './NotificationTargetRepository'
 import * as NotificationWorker from './NotificationWorker'
@@ -40,6 +40,7 @@ const definition = Effect.runSync(
       headers: {},
     },
     cronSchedule: '*/5 * * * *',
+    expectedStatus: 200,
   }),
 )
 
@@ -47,8 +48,8 @@ const openClient = HttpApiTest.groups(Api, ['monitor', 'notification'])
 
 const dependencies = Layer.provideMerge(BunHttpServer.layerHttpServices)
 
-const MonitorStatusAbsent = Layer.succeed(MonitorStatusService, {
-  getStatus: () => Effect.succeed(Option.none()),
+const MonitorHealthAbsent = Layer.succeed(MonitorHealth, {
+  getHealth: () => Effect.succeed(Option.none()),
 })
 
 const makeLayers = (overrides: Partial<MattermostInterface> = {}) => {
@@ -73,7 +74,7 @@ const makeLayers = (overrides: Partial<MattermostInterface> = {}) => {
     Layer.provide(monitors),
     Layer.provide(targets),
     Layer.provide(mattermost),
-    Layer.provide(MonitorStatusAbsent),
+    Layer.provide(MonitorHealthAbsent),
     dependencies,
   )
   const worker = NotificationWorker.layer.pipe(Layer.provide(events), Layer.provide(mattermost))

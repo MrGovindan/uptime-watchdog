@@ -16,6 +16,7 @@ const expectedColumns: ReadonlyArray<MonitorColumn> = [
   { name: 'name', type: 'TEXT', notnull: 1, pk: 0 },
   { name: 'request', type: 'TEXT', notnull: 1, pk: 0 },
   { name: 'cronSchedule', type: 'TEXT', notnull: 1, pk: 0 },
+  { name: 'expectedStatus', type: 'INTEGER', notnull: 1, pk: 0 },
   { name: 'createdAt', type: 'TEXT', notnull: 1, pk: 0 },
 ]
 

@@ -5,6 +5,7 @@ import {
   type MattermostUser,
   MattermostUnavailable,
   MattermostUserNotFound,
+  Monitor,
   MonitorDefinition,
   type MonitorObservation,
   ProviderUnavailable,
@@ -29,7 +30,7 @@ import { HttpRouter } from 'effect/unstable/http'
 import { HttpApiTest } from 'effect/unstable/httpapi'
 import * as Database from './Database'
 import { CronConversion, type Interface as CronConversionInterface } from './CronConversion'
-import { layer as monitorStatusLayer } from './MonitorStatusService'
+import { layer as monitorHealthLayer } from './MonitorHealth'
 import { Mattermost } from './Mattermost'
 import type { Interface as MattermostInterface } from './Mattermost'
 import * as MonitorApi from './MonitorApi'
@@ -91,19 +92,19 @@ const shareDependencies = () => {
     start: () => Effect.void,
     observations: Stream.fromQueue(observationQueue),
   })
-  const status = monitorStatusLayer.pipe(Layer.provide(streamsStub), Layer.provide(events))
+  const health = monitorHealthLayer.pipe(Layer.provide(streamsStub), Layer.provide(events))
 
   return {
     events,
     monitors: monitorRepositoryLayer.pipe(Layer.provide(database)),
     targets: notificationTargetRepositoryLayer.pipe(Layer.provide(database)),
-    status,
+    health,
     observationQueue,
   }
 }
 
 const groupLayer = (overrides: Partial<MattermostInterface> = {}) => {
-  const { events, monitors, targets, status } = shareDependencies()
+  const { events, monitors, targets, health } = shareDependencies()
 
   return Layer.mergeAll(
     MonitorApi.MonitorGroupLive,
@@ -115,7 +116,7 @@ const groupLayer = (overrides: Partial<MattermostInterface> = {}) => {
     Layer.provide(targets),
     Layer.provide(mattermostStub(overrides)),
     Layer.provide(cronConversionStub()),
-    Layer.provide(status),
+    Layer.provide(health),
     dependencies,
   )
 }
@@ -124,7 +125,7 @@ const applicationLayer = (
   overrides: Partial<MattermostInterface> = {},
   cronOverrides: Partial<CronConversionInterface> = {},
 ) => {
-  const { events, monitors, targets, status } = shareDependencies()
+  const { events, monitors, targets, health } = shareDependencies()
 
   return MonitorApi.layer.pipe(
     Layer.provide(events),
@@ -132,7 +133,7 @@ const applicationLayer = (
     Layer.provide(targets),
     Layer.provide(mattermostStub(overrides)),
     Layer.provide(cronConversionStub(cronOverrides)),
-    Layer.provide(status),
+    Layer.provide(health),
     dependencies,
   )
 }
@@ -149,6 +150,7 @@ const definitionJson = {
     headers: {},
   },
   cronSchedule: '*/5 * * * *',
+  expectedStatus: 200,
 }
 
 const definition = Effect.runSync(Schema.decodeUnknownEffect(MonitorDefinition)(definitionJson))
@@ -209,7 +211,7 @@ describe('monitor registration', () => {
       const created = yield* monitor.register({ payload: definition })
       const monitors = yield* monitor.list({})
 
-      expect(Option.isNone(monitors[0]!.status)).toBe(true)
+      expect(Option.isNone(monitors[0]!.health)).toBe(true)
       expect(monitors[0]).toMatchObject({ monitor: created })
     }).pipe(Effect.provide(groupLayer())),
   )
@@ -282,7 +284,7 @@ describe('monitor update', () => {
       expect(updated.createdAt).toEqual(created.createdAt)
 
       const monitors = yield* monitor.list({})
-      expect(Option.isNone(monitors[0]!.status)).toBe(true)
+      expect(Option.isNone(monitors[0]!.health)).toBe(true)
       expect(monitors[0]).toMatchObject({ monitor: updated })
     }).pipe(Effect.provide(groupLayer())),
   )
@@ -537,7 +539,7 @@ describe('mattermost notification endpoints', () => {
   })
 })
 
-describe('monitor status', () => {
+describe('monitor health', () => {
   const applicationLayerQueued = () => {
     const deps = shareDependencies()
 
@@ -548,22 +550,12 @@ describe('monitor status', () => {
         Layer.provide(deps.targets),
         Layer.provide(mattermostStub()),
         Layer.provide(cronConversionStub()),
-        Layer.provide(deps.status),
+        Layer.provide(deps.health),
         dependencies,
       ),
       observations: deps.observationQueue,
     }
   }
-
-  const successObservation = (monitorId: MonitorId): MonitorObservation =>
-    ({
-      monitorId,
-      monitorName: 'Prod API',
-      observation: {
-        time: DateTime.nowUnsafe(),
-        response: Result.succeed({ duration: Duration.millis(5), status: 200, body: 'pong' }),
-      },
-    }) as MonitorObservation
 
   const waitFor = <A>(
     effect: Effect.Effect<A>,
@@ -578,7 +570,10 @@ describe('monitor status', () => {
           : Effect.die('waitFor exceeded'),
     )
 
-  type Listed = { monitor: { id: string }; status: { _tag: string; value?: unknown } }
+  type Listed = {
+    monitor: { id: string }
+    health: { _tag: string; value?: { _tag?: string; reason?: unknown } }
+  }
 
   const listMonitorsViaHttp = (handler: (req: Request) => Promise<Response>) =>
     Effect.gen(function* () {
@@ -587,7 +582,28 @@ describe('monitor status', () => {
       return (yield* Effect.promise(() => response.json())) as Array<Listed>
     })
 
-  it.effect('reports status from the observation stream', () =>
+  const observationFor = (
+    handler: (request: Request) => Promise<Response>,
+    monitorId: MonitorId,
+    status: number,
+  ): Effect.Effect<MonitorObservation> =>
+    listMonitorsViaHttp(handler).pipe(
+      Effect.flatMap((monitors) =>
+        Schema.decodeUnknownEffect(Monitor.json)(
+          monitors.find((entry) => entry.monitor.id === monitorId)!.monitor,
+        ),
+      ),
+      Effect.map((monitor) => ({
+        monitor,
+        observation: {
+          time: DateTime.nowUnsafe(),
+          response: Result.succeed({ duration: Duration.millis(5), status, body: 'pong' }),
+        },
+      })),
+      Effect.orDie,
+    )
+
+  it.effect('reports health from the observation stream', () =>
     Effect.gen(function* () {
       const { layer, observations } = applicationLayerQueued()
 
@@ -599,18 +615,22 @@ describe('monitor status', () => {
           expect(pending).toHaveLength(1)
           expect(pending[0]).toMatchObject({
             monitor: { id: monitorId },
-            status: { _tag: 'None' },
+            health: { _tag: 'None' },
           })
 
-          yield* Queue.offer(observations, successObservation(MonitorId.make(monitorId)))
+          yield* Queue.offer(
+            observations,
+            yield* observationFor(handler, MonitorId.make(monitorId), 200),
+          )
 
           const [observed] = yield* waitFor(
             listMonitorsViaHttp(handler),
-            (monitors) => monitors.length === 1 && monitors[0]!.status._tag === 'Some',
+            (monitors) => monitors.length === 1 && monitors[0]!.health._tag === 'Some',
           )
           expect(observed!.monitor.id).toBe(monitorId)
-          expect(observed!.status.value).toMatchObject({
-            outcome: { _tag: 'Success', response: { status: 200 } },
+          expect(observed!.health.value).toMatchObject({
+            _tag: 'Healthy',
+            response: { status: 200 },
           })
         }),
       )
@@ -626,20 +646,23 @@ describe('monitor status', () => {
           const firstId = yield* registerViaHttp(handler)
           const secondId = yield* registerViaHttp(handler)
 
-          yield* Queue.offer(observations, successObservation(MonitorId.make(firstId)))
+          yield* Queue.offer(
+            observations,
+            yield* observationFor(handler, MonitorId.make(firstId), 200),
+          )
 
           const listed = yield* waitFor(listMonitorsViaHttp(handler), (monitors) =>
-            monitors.some((entry) => entry.monitor.id === firstId && entry.status._tag === 'Some'),
+            monitors.some((entry) => entry.monitor.id === firstId && entry.health._tag === 'Some'),
           )
           const firstMonitored = listed.find((entry) => entry.monitor.id === firstId)
           const secondMonitored = listed.find((entry) => entry.monitor.id === secondId)
           expect(firstMonitored).toMatchObject({
             monitor: { id: firstId },
-            status: { _tag: 'Some', value: { outcome: { _tag: 'Success' } } },
+            health: { _tag: 'Some', value: { _tag: 'Healthy' } },
           })
           expect(secondMonitored).toMatchObject({
             monitor: { id: secondId },
-            status: { _tag: 'None' },
+            health: { _tag: 'None' },
           })
 
           const deleted = yield* request(handler, `/monitor/${firstId}`, { method: 'DELETE' })
@@ -648,7 +671,49 @@ describe('monitor status', () => {
           const after = yield* listMonitorsViaHttp(handler)
           expect(after).toHaveLength(1)
           expect(after[0]!.monitor.id).toBe(secondId)
-          expect(after[0]!.status._tag).toBe('None')
+          expect(after[0]!.health._tag).toBe('None')
+        }),
+      )
+    }),
+  )
+
+  it.effect('transitions between healthy and degraded as observations change', () =>
+    Effect.gen(function* () {
+      const { layer, observations } = applicationLayerQueued()
+
+      return yield* withWebHandler(layer, (handler) =>
+        Effect.gen(function* () {
+          const monitorId = yield* registerViaHttp(handler)
+
+          yield* Queue.offer(
+            observations,
+            yield* observationFor(handler, MonitorId.make(monitorId), 200),
+          )
+          yield* waitFor(
+            listMonitorsViaHttp(handler),
+            (monitors) =>
+              monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Healthy',
+          )
+
+          yield* Queue.offer(
+            observations,
+            yield* observationFor(handler, MonitorId.make(monitorId), 503),
+          )
+          yield* waitFor(
+            listMonitorsViaHttp(handler),
+            (monitors) =>
+              monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Degraded',
+          )
+
+          yield* Queue.offer(
+            observations,
+            yield* observationFor(handler, MonitorId.make(monitorId), 200),
+          )
+          yield* waitFor(
+            listMonitorsViaHttp(handler),
+            (monitors) =>
+              monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Healthy',
+          )
         }),
       )
     }),

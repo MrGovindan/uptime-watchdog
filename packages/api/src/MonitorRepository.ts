@@ -36,6 +36,7 @@ const make = Effect.gen(function* () {
           name: definition.name,
           request: definition.request,
           cronSchedule: definition.cronSchedule,
+          expectedStatus: definition.expectedStatus,
         }),
       )
       .pipe(Effect.orDie)
@@ -47,7 +48,7 @@ const make = Effect.gen(function* () {
     Request: Schema.Struct({}),
     Result: Monitor,
     execute: () =>
-      sql`SELECT id, name, request, cronSchedule, createdAt FROM monitor ORDER BY createdAt DESC`,
+      sql`SELECT id, name, request, cronSchedule, expectedStatus, createdAt FROM monitor ORDER BY createdAt DESC`,
   })({}).pipe(Effect.orDie)
 
   const find = (id: MonitorId): Effect.Effect<Option.Option<Monitor>> =>
@@ -55,7 +56,7 @@ const make = Effect.gen(function* () {
       Request: Schema.Struct({ id: MonitorId }),
       Result: Monitor,
       execute: ({ id }) =>
-        sql`SELECT id, name, request, cronSchedule, createdAt FROM monitor WHERE id = ${id} LIMIT 1`,
+        sql`SELECT id, name, request, cronSchedule, expectedStatus, createdAt FROM monitor WHERE id = ${id} LIMIT 1`,
     })({ id }).pipe(Effect.orDie)
 
   const update = (
@@ -65,11 +66,11 @@ const make = Effect.gen(function* () {
     SqlSchema.findOneOption({
       Request: Monitor.update,
       Result: Monitor,
-      execute: ({ id, name, request, cronSchedule }) => sql`
+      execute: ({ id, name, request, cronSchedule, expectedStatus }) => sql`
         UPDATE monitor
-        SET name = ${name}, request = ${request}, cronSchedule = ${cronSchedule}
+        SET name = ${name}, request = ${request}, cronSchedule = ${cronSchedule}, expectedStatus = ${expectedStatus}
         WHERE id = ${id}
-        RETURNING id, name, request, cronSchedule, createdAt
+        RETURNING id, name, request, cronSchedule, expectedStatus, createdAt
       `,
     })(
       Monitor.update.make({
@@ -77,6 +78,7 @@ const make = Effect.gen(function* () {
         name: definition.name,
         request: definition.request,
         cronSchedule: definition.cronSchedule,
+        expectedStatus: definition.expectedStatus,
       }),
     ).pipe(Effect.orDie)
 
@@ -86,7 +88,7 @@ const make = Effect.gen(function* () {
       Result: Monitor,
       execute: ({ id }) => sql`
         DELETE FROM monitor WHERE id = ${id}
-        RETURNING id, name, request, cronSchedule, createdAt
+        RETURNING id, name, request, cronSchedule, expectedStatus, createdAt
       `,
     })({ id }).pipe(Effect.orDie)
 

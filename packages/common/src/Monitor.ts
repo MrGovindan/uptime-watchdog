@@ -10,6 +10,14 @@ export type MonitorId = typeof MonitorId.Type
 
 export const MONITOR_NAME_MAX_LENGTH = 128
 
+export const EXPECTED_STATUS_MIN = 100
+export const EXPECTED_STATUS_MAX = 599
+
+export const ExpectedStatus = Schema.Natural.pipe(
+  Schema.check(Schema.isBetween({ minimum: EXPECTED_STATUS_MIN, maximum: EXPECTED_STATUS_MAX })),
+)
+export type ExpectedStatus = typeof ExpectedStatus.Type
+
 export const MonitorName = Schema.Trim.pipe(
   Schema.check(Schema.isNonEmpty()),
   Schema.check(Schema.isMaxLength(MONITOR_NAME_MAX_LENGTH)),
@@ -42,6 +50,7 @@ export class Monitor extends Model.Class<Monitor>('Monitor')({
     jsonUpdate: UptimeRequest,
   }),
   cronSchedule: Cron,
+  expectedStatus: ExpectedStatus,
   createdAt: Model.DateTimeInsert,
 }) {}
 
@@ -49,7 +58,6 @@ export const MonitorDefinition = Monitor.jsonCreate
 export type MonitorDefinition = typeof MonitorDefinition.Type
 
 export type MonitorObservation = {
-  monitorId: MonitorId
-  monitorName: MonitorName
+  monitor: Monitor
   observation: UptimeObservation
 }

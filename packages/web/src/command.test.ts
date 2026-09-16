@@ -18,6 +18,7 @@ const monitorJson = {
     headers: {},
   },
   cronSchedule: '*/5 * * * *',
+  expectedStatus: 200,
   createdAt: '2026-09-13T12:00:00.000Z',
 }
 
@@ -31,6 +32,7 @@ const definition = Schema.decodeSync(MonitorDefinition)({
     headers: {},
   },
   cronSchedule: '*/5 * * * *',
+  expectedStatus: 200,
 })
 
 const jsonResponse = (
@@ -58,7 +60,7 @@ describe('ListMonitors', () => {
   test('decodes the monitor list on success', async () => {
     const client = HttpClient.make((request) =>
       Effect.sync(() =>
-        jsonResponse(request, 200, [{ monitor: monitorJson, status: { _tag: 'None' } }]),
+        jsonResponse(request, 200, [{ monitor: monitorJson, health: { _tag: 'None' } }]),
       ),
     )
 

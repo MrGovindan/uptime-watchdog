@@ -7,7 +7,7 @@ import {
   MattermostUserSearchDefinition,
 } from './Mattermost'
 import { Monitor, MonitorDefinition, MonitorId } from './Monitor'
-import { MonitorWithStatus } from './MonitorStatus'
+import { MonitorWithHealth } from './MonitorHealth'
 import { NotificationTarget, NotificationTargetDefinition } from './NotificationTarget'
 import { CronDescription, CronExpression } from './Uptime'
 
@@ -86,7 +86,7 @@ export const Api = HttpApi.make('UptimeWatchdog')
         success: Monitor.json.pipe(HttpApiSchema.status(201)),
       }),
       HttpApiEndpoint.get('list', '/monitor', {
-        success: Schema.Array(MonitorWithStatus),
+        success: Schema.Array(MonitorWithHealth),
       }),
       HttpApiEndpoint.put('updateMonitor', '/monitor/:monitorId', {
         params: { monitorId: MonitorId },

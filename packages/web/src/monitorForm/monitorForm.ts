@@ -1,5 +1,7 @@
 import {
   CronExpression,
+  EXPECTED_STATUS_MAX,
+  EXPECTED_STATUS_MIN,
   HttpMethod,
   Monitor,
   MonitorName,
@@ -56,6 +58,21 @@ const portRules = makeRules({
   rules: [Rule.fromSchema(PortValue, 'Port must be a whole number from 1 to 65535')],
 })
 
+const ExpectedStatusValue = Schema.NumberFromString.pipe(
+  Schema.check(Schema.isInt()),
+  Schema.check(Schema.isBetween({ minimum: EXPECTED_STATUS_MIN, maximum: EXPECTED_STATUS_MAX })),
+)
+
+const expectedStatusRules = makeRules({
+  required: 'Expected status is required',
+  rules: [
+    Rule.fromSchema(
+      ExpectedStatusValue,
+      `Expected status must be a whole number from ${EXPECTED_STATUS_MIN} to ${EXPECTED_STATUS_MAX}`,
+    ),
+  ],
+})
+
 const cronScheduleRules = makeRules({
   required: 'Cron schedule is required',
   rules: [Rule.fromSchema(CronExpression, 'Enter a valid cron expression')],
@@ -87,6 +104,7 @@ export const Form = Schema.Struct({
   protocol: Protocol,
   method: HttpMethod,
   path: Schema.String,
+  expectedStatus: Field(Schema.String),
   cronSchedule: Field(Schema.String),
   headers: Schema.Array(HeaderRow),
   headerSequence: Schema.Number,
@@ -102,6 +120,7 @@ export const makeInitialForm = (): Form => ({
   protocol: 'https',
   method: 'GET',
   path: '',
+  expectedStatus: emptyField(),
   cronSchedule: emptyField(),
   headers: [],
   headerSequence: 0,
@@ -121,6 +140,7 @@ export const formForMonitor = (monitor: Monitor): Form => {
     protocol: monitor.request.protocol,
     method: monitor.request.method,
     path: monitor.request.path ?? '',
+    expectedStatus: NotValidated({ value: String(monitor.expectedStatus) }),
     cronSchedule: NotValidated({ value: Cron.format(monitor.cronSchedule) }),
     headers,
     headerSequence: headers.length,
@@ -173,6 +193,7 @@ export const validateForm = (form: Form): Readonly<{ form: Form; isValid: boolea
   const name = validate(nameRules)(form.name.value)
   const hostname = validate(hostnameRules)(form.hostname.value)
   const port = validate(portRules)(form.port.value)
+  const expectedStatus = validate(expectedStatusRules)(form.expectedStatus.value)
   const cronSchedule = validate(cronScheduleRules)(form.cronSchedule.value)
   const headers = validateHeaderRows(form.headers)
 
@@ -181,11 +202,12 @@ export const validateForm = (form: Form): Readonly<{ form: Form; isValid: boolea
       [name, nameRules],
       [hostname, hostnameRules],
       [port, portRules],
+      [expectedStatus, expectedStatusRules],
       [cronSchedule, cronScheduleRules],
     ]) && headers.isValid
 
   return {
-    form: { ...form, name, hostname, port, cronSchedule, headers: headers.headers },
+    form: { ...form, name, hostname, port, expectedStatus, cronSchedule, headers: headers.headers },
     isValid,
   }
 }
@@ -199,6 +221,7 @@ export const toMonitorDefinition = (form: Form): MonitorDefinition => {
   return {
     name: Schema.decodeSync(MonitorName)(form.name.value),
     cronSchedule: Schema.decodeSync(CronExpression)(form.cronSchedule.value.trim()),
+    expectedStatus: Number(form.expectedStatus.value.trim()),
     request: {
       hostname: form.hostname.value.trim(),
       port: Number(form.port.value),

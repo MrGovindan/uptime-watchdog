@@ -21,6 +21,7 @@ export const Message = defineMessageUnion({
   UpdatedProtocol: { protocol: Protocol },
   UpdatedMethod: { method: HttpMethod },
   UpdatedPath: { value: Schema.String },
+  UpdatedExpectedStatus: { value: Schema.String },
   UpdatedCronSchedule: { value: Schema.String },
   ClickedAddHeader: {},
   ClickedRemoveHeader: { id: Schema.String },

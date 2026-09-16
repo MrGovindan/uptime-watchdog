@@ -131,6 +131,12 @@ export const update = (model: Model, message: Message) =>
       }),
     }),
 
+    UpdatedExpectedStatus: ({ value }) => ({
+      model: evo(model, {
+        form: (form) => evo(form, { expectedStatus: () => NotValidated({ value }) }),
+      }),
+    }),
+
     UpdatedCronSchedule: ({ value }) => ({
       model: evo(model, {
         form: (form) => evo(form, { cronSchedule: () => NotValidated({ value }) }),

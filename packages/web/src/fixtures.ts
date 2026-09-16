@@ -18,6 +18,7 @@ export const monitorJson = {
     headers: {},
   },
   cronSchedule: '*/5 * * * *',
+  expectedStatus: 200,
   createdAt: '2026-09-13T12:00:00.000Z',
 } as const
 
@@ -41,6 +42,7 @@ export const modelReadyToCreate = evo(modelWithOpenDialog, {
     name: Valid({ value: 'Prod API' }),
     hostname: Valid({ value: 'example.com' }),
     port: Valid({ value: '443' }),
+    expectedStatus: Valid({ value: '200' }),
     cronSchedule: Valid({ value: '*/5 * * * *' }),
   }),
 })
@@ -58,6 +60,7 @@ export const modelReadyToEdit = evo(modelWithMonitors, {
     name: Valid({ value: 'Prod API' }),
     hostname: Valid({ value: 'example.com' }),
     port: Valid({ value: '443' }),
+    expectedStatus: Valid({ value: '200' }),
     cronSchedule: Valid({ value: '*/5 * * * *' }),
   }),
 })

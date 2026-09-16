@@ -1,7 +1,6 @@
 import {
   Monitor,
   type MonitorId,
-  type MonitorName,
   type MonitorObservation,
   type UptimeObservation,
 } from '@uptime-watchdog/common'
@@ -11,7 +10,7 @@ import { MonitorRepository } from './MonitorRepository'
 import * as StreamRegistry from './StreamRegistry'
 import { WatchdogEvent, WatchdogEvents } from './WatchdogEvents'
 
-type RegistryValue = Readonly<{ monitorName: MonitorName; observation: UptimeObservation }>
+type RegistryValue = Readonly<{ monitor: Monitor; observation: UptimeObservation }>
 
 export interface Interface {
   readonly start: (monitor: Monitor) => Effect.Effect<void>
@@ -27,7 +26,7 @@ const createMonitorStream = (monitor: Monitor, checkUptime: CheckUptime.Interfac
     checkUptime(monitor.request).pipe(
       Effect.annotateSpans({ 'monitor.name': monitor.name, 'monitor.id': monitor.id }),
       Effect.annotateLogs({ monitor: monitor.name }),
-      Effect.map((observation) => ({ monitorName: monitor.name, observation })),
+      Effect.map((observation) => ({ monitor, observation })),
     ),
     Schedule.cron(monitor.cronSchedule),
   ).pipe(Stream.orDie)
@@ -51,6 +50,9 @@ const make = Effect.gen(function* () {
         MonitorDeleted: ({ monitor }) => registry.remove(monitor.id),
         NotificationTargetAdded: () => Effect.void,
         NotificationTargetRemoved: () => Effect.void,
+        MonitorHealthy: () => Effect.void,
+        MonitorDegraded: () => Effect.void,
+        MonitorHealed: () => Effect.void,
       }),
     ),
     Effect.forkScoped,
@@ -61,13 +63,7 @@ const make = Effect.gen(function* () {
 
   return {
     start,
-    observations: registry.stream.pipe(
-      Stream.map(([monitorId, { monitorName, observation }]) => ({
-        monitorId,
-        monitorName,
-        observation,
-      })),
-    ),
+    observations: registry.stream.pipe(Stream.map(([, value]) => value)),
   } satisfies Interface
 })
 

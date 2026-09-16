@@ -10,6 +10,7 @@ export default Effect.gen(function* () {
       name TEXT NOT NULL,
       request TEXT NOT NULL,
       cronSchedule TEXT NOT NULL,
+      expectedStatus INTEGER NOT NULL,
       createdAt TEXT NOT NULL
     )
   `

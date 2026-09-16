@@ -1,4 +1,4 @@
-import { Monitor, NotificationTarget } from '@uptime-watchdog/common'
+import { Monitor, MonitorHealth, NotificationTarget } from '@uptime-watchdog/common'
 import { Context, Effect, Layer, PubSub, Schema, Stream } from 'effect'
 
 export const WatchdogEvent = Schema.TaggedUnion({
@@ -7,6 +7,9 @@ export const WatchdogEvent = Schema.TaggedUnion({
   MonitorDeleted: { monitor: Monitor, targets: Schema.Array(NotificationTarget) },
   NotificationTargetAdded: { monitor: Monitor, target: NotificationTarget },
   NotificationTargetRemoved: { monitor: Monitor, target: NotificationTarget },
+  MonitorHealthy: { monitor: Monitor, health: MonitorHealth },
+  MonitorDegraded: { monitor: Monitor, health: MonitorHealth },
+  MonitorHealed: { monitor: Monitor, health: MonitorHealth },
 })
 export type WatchdogEvent = typeof WatchdogEvent.Type
 
@@ -22,9 +25,10 @@ export class WatchdogEvents extends Context.Service<WatchdogEvents, Interface>()
 const make = Effect.gen(function* () {
   const pubsub = yield* PubSub.unbounded<WatchdogEvent>()
 
-  const publish = Effect.fn('WatchdogEvents.publish')((event: WatchdogEvent) =>
-    PubSub.publish(pubsub, event).pipe(Effect.asVoid),
-  )
+  const publish = Effect.fn('WatchdogEvents.publish')(function* (event: WatchdogEvent) {
+    yield* Effect.log('Publishing ', event._tag)
+    yield* PubSub.publish(pubsub, event)
+  })
 
   return {
     publish,
