@@ -14,7 +14,7 @@ import * as NotificationTargetRepository from './NotificationTargetRepository'
 import * as NotificationWorker from './NotificationWorker'
 import * as WatchdogEvents from './WatchdogEvents'
 import * as WatchdogRpc from './WatchdogRpc'
-import { OpenAiClient, OpenAiLanguageModel } from '@effect/ai-openai'
+import { OpenAiClient, OpenAiLanguageModel } from '@effect/ai-openai-compat'
 
 const application = Layer.unwrap(
   Effect.gen(function* () {
