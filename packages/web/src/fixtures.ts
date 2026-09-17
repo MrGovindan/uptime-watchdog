@@ -1,6 +1,11 @@
-import { Monitor } from '@uptime-watchdog/common'
+import {
+  type MonitorHealth,
+  Monitor,
+  type NotificationTarget,
+  WatchdogEvent,
+} from '@uptime-watchdog/common'
 import { Dialog } from '@foldkit/ui'
-import { Option, Schema } from 'effect'
+import { DateTime, Duration, Option, Schema } from 'effect'
 import { Valid } from 'foldkit/fieldValidation'
 import { evo } from 'foldkit/struct'
 
@@ -64,3 +69,57 @@ export const modelReadyToEdit = evo(modelWithMonitors, {
     cronSchedule: Valid({ value: '*/5 * * * *' }),
   }),
 })
+
+const healthy: MonitorHealth = {
+  _tag: 'Healthy',
+  time: DateTime.nowUnsafe(),
+  response: { duration: Duration.millis(5), status: 200, body: 'pong' },
+}
+
+const degraded: MonitorHealth = {
+  _tag: 'Degraded',
+  time: DateTime.nowUnsafe(),
+  reason: {
+    _tag: 'Unexpected',
+    response: { duration: Duration.millis(5), status: 503, body: 'down' },
+  },
+}
+
+const notificationTarget: NotificationTarget = {
+  monitorId: monitor.id,
+  mattermostUserId: 'mm-jesse',
+  mattermostUsername: 'jesse',
+  mattermostDisplayName: 'Jesse Duffield',
+  createdAt: DateTime.nowUnsafe(),
+}
+
+export const monitorRegisteredEvent: WatchdogEvent = { _tag: 'MonitorRegistered', monitor }
+export const monitorUpdatedEvent: WatchdogEvent = {
+  _tag: 'MonitorUpdated',
+  monitor: updatedMonitor,
+}
+export const monitorDeletedEvent: WatchdogEvent = {
+  _tag: 'MonitorDeleted',
+  monitor,
+  targets: [],
+}
+export const monitorHealthyEvent: WatchdogEvent = {
+  _tag: 'MonitorHealthy',
+  monitor: updatedMonitor,
+  health: healthy,
+}
+export const monitorDegradedEvent: WatchdogEvent = {
+  _tag: 'MonitorDegraded',
+  monitor: updatedMonitor,
+  health: degraded,
+}
+export const monitorHealedEvent: WatchdogEvent = {
+  _tag: 'MonitorHealed',
+  monitor: updatedMonitor,
+  health: healthy,
+}
+export const notificationTargetAddedEvent: WatchdogEvent = {
+  _tag: 'NotificationTargetAdded',
+  monitor,
+  target: notificationTarget,
+}

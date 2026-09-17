@@ -3,7 +3,8 @@ import { Array, Context, Effect, Layer, Schedule, Stream } from 'effect'
 import { Mattermost } from './Mattermost'
 import * as NotificationMessages from './NotificationMessages'
 import { NotificationTargetRepository } from './NotificationTargetRepository'
-import { WatchdogEvent, WatchdogEvents } from './WatchdogEvents'
+import { WatchdogEvent } from '@uptime-watchdog/common'
+import { WatchdogEvents } from './WatchdogEvents'
 
 type Delivery = Readonly<{ userId: MattermostUserId; message: string }>
 

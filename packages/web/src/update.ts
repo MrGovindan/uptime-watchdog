@@ -1,4 +1,4 @@
-import { Monitor, MonitorId } from '@uptime-watchdog/common'
+import { Monitor, MonitorId, WatchdogEvent } from '@uptime-watchdog/common'
 import { Array, Option } from 'effect'
 import { AsyncData, Update } from 'foldkit'
 import { NotValidated } from 'foldkit/fieldValidation'
@@ -27,16 +27,13 @@ import { type Model, MonitorsAsyncData } from './model'
 
 // MONITOR LIST
 
-const insertMonitor = (model: Model, monitor: Monitor): Model => {
-  if (AsyncData.hasData(model.monitors)) {
-    const existing = Option.getOrElse(AsyncData.getData(model.monitors), () => [])
-    const data = [monitor, ...existing]
-    return evo(model, { monitors: () => MonitorsAsyncData.Success({ data }) })
-  }
+const upsertMonitor = (model: Model, monitor: Monitor): Model => {
+  const existing = Option.getOrElse(AsyncData.getData(model.monitors), () => [])
+  const data = Array.some(existing, (current) => current.id === monitor.id)
+    ? Array.map(existing, (current) => (current.id === monitor.id ? monitor : current))
+    : [monitor, ...existing]
 
-  return evo(model, {
-    monitors: () => MonitorsAsyncData.Success({ data: [monitor] }),
-  })
+  return evo(model, { monitors: () => MonitorsAsyncData.Success({ data }) })
 }
 
 const replaceMonitor = (model: Model, monitor: Monitor): Model => {
@@ -60,6 +57,20 @@ const removeMonitor = (model: Model, monitorId: MonitorId): Model => {
 
   return evo(model, { monitors: () => MonitorsAsyncData.Success({ data }) })
 }
+
+// Watchdog events patch the list in place. Registration seeds the list even
+// while it is still loading; later events replace the monitor they carry.
+const foldWatchdogEvent = (model: Model, event: WatchdogEvent): Model =>
+  WatchdogEvent.match(event, {
+    MonitorRegistered: ({ monitor }) => upsertMonitor(model, monitor),
+    MonitorUpdated: ({ monitor }) => replaceMonitor(model, monitor),
+    MonitorDeleted: ({ monitor }) => removeMonitor(model, monitor.id),
+    MonitorHealthy: ({ monitor }) => replaceMonitor(model, monitor),
+    MonitorDegraded: ({ monitor }) => replaceMonitor(model, monitor),
+    MonitorHealed: ({ monitor }) => replaceMonitor(model, monitor),
+    NotificationTargetAdded: () => model,
+    NotificationTargetRemoved: () => model,
+  })
 
 // UPDATE
 
@@ -226,7 +237,7 @@ export const update = (model: Model, message: Message) =>
     },
 
     CompletedRegisterMonitor: ({ monitor }) =>
-      foldShowToast(insertMonitor(model, monitor), {
+      foldShowToast(upsertMonitor(model, monitor), {
         variant: 'Success',
         payload: { message: 'Monitor created' },
       }),
@@ -290,4 +301,6 @@ export const update = (model: Model, message: Message) =>
     GotCronHelpMessage: ({ message: cronHelpMessage }) => foldCronHelp(model, cronHelpMessage),
 
     GotToastMessage: ({ message: toastMessage }) => foldToast(model, toastMessage),
+
+    GotWatchdogEvent: ({ event }) => ({ model: foldWatchdogEvent(model, event) }),
   })

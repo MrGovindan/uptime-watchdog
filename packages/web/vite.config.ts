@@ -13,6 +13,8 @@ export default defineConfig({
       '/monitor': 'http://localhost:3000',
       '/notification': 'http://localhost:3000',
       '/cron': 'http://localhost:3000',
+      // Keep in sync with WATCHDOG_RPC_PATH from @uptime-watchdog/common.
+      '/rpc': { target: 'http://localhost:3000', ws: true },
     },
   },
 })

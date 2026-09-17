@@ -1,17 +1,5 @@
-import { Monitor, MonitorHealth, NotificationTarget } from '@uptime-watchdog/common'
-import { Context, Effect, Layer, PubSub, Schema, Stream } from 'effect'
-
-export const WatchdogEvent = Schema.TaggedUnion({
-  MonitorRegistered: { monitor: Monitor },
-  MonitorUpdated: { monitor: Monitor },
-  MonitorDeleted: { monitor: Monitor, targets: Schema.Array(NotificationTarget) },
-  NotificationTargetAdded: { monitor: Monitor, target: NotificationTarget },
-  NotificationTargetRemoved: { monitor: Monitor, target: NotificationTarget },
-  MonitorHealthy: { monitor: Monitor, health: MonitorHealth },
-  MonitorDegraded: { monitor: Monitor, health: MonitorHealth },
-  MonitorHealed: { monitor: Monitor, health: MonitorHealth },
-})
-export type WatchdogEvent = typeof WatchdogEvent.Type
+import type { WatchdogEvent } from '@uptime-watchdog/common'
+import { Context, Effect, Layer, PubSub, Stream } from 'effect'
 
 export interface Interface {
   readonly publish: (event: WatchdogEvent) => Effect.Effect<void>

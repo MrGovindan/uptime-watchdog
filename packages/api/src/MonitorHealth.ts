@@ -2,7 +2,8 @@ import type { Monitor, MonitorHealth as MonitorHealthState } from '@uptime-watch
 import { type MonitorId, toMonitorHealth } from '@uptime-watchdog/common'
 import { Context, Effect, HashMap, Layer, Option, Ref, Stream } from 'effect'
 import * as MonitorStreams from './MonitorStreams'
-import { WatchdogEvent, WatchdogEvents } from './WatchdogEvents'
+import { WatchdogEvent } from '@uptime-watchdog/common'
+import { WatchdogEvents } from './WatchdogEvents'
 
 export interface Interface {
   readonly getHealth: (monitorId: MonitorId) => Effect.Effect<Option.Option<MonitorHealthState>>

@@ -1,9 +1,9 @@
 import { Runtime } from 'foldkit'
 
-import { layer as apiClientLayer } from './apiClient'
 import { init, subscriptions } from './main'
 import { Model } from './model'
 import { Message } from './message'
+import { Resources } from './resources'
 import { update } from './update'
 import { view } from './view'
 
@@ -13,7 +13,7 @@ const application = Runtime.makeApplication({
   update,
   view,
   container: document.getElementById('root'),
-  resources: apiClientLayer,
+  resources: Resources,
   subscriptions,
   devTools: {
     Message,

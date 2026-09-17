@@ -8,7 +8,8 @@ import { Context, Effect, Layer, Schedule, Stream } from 'effect'
 import * as CheckUptime from './CheckUptime'
 import { MonitorRepository } from './MonitorRepository'
 import * as StreamRegistry from './StreamRegistry'
-import { WatchdogEvent, WatchdogEvents } from './WatchdogEvents'
+import { WatchdogEvent } from '@uptime-watchdog/common'
+import { WatchdogEvents } from './WatchdogEvents'
 
 type RegistryValue = Readonly<{ monitor: Monitor; observation: UptimeObservation }>
 

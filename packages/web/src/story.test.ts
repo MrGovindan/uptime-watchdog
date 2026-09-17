@@ -16,6 +16,13 @@ import {
   modelWithMonitors,
   modelWithOpenDialog,
   monitor,
+  monitorDegradedEvent,
+  monitorDeletedEvent,
+  monitorHealedEvent,
+  monitorHealthyEvent,
+  monitorRegisteredEvent,
+  monitorUpdatedEvent,
+  notificationTargetAddedEvent,
   updatedMonitor,
 } from './fixtures'
 
@@ -319,6 +326,127 @@ test('a monitor created before the list loads still lands in the list', () => {
     model((current) => {
       expect(current.monitors._tag).toBe('Success')
       if (current.monitors._tag === 'Success') {
+        expect(current.monitors.data[0]?.id).toBe(monitor.id)
+      }
+    }),
+  )
+})
+
+test('a registered event seeds a loading list', () => {
+  const loadingModel = evo(makeInitialModel(), {
+    monitors: () => MonitorsAsyncData.Loading(),
+  })
+
+  story(
+    update,
+    given(loadingModel),
+    message(Message.GotWatchdogEvent({ event: monitorRegisteredEvent })),
+    model((current) => {
+      expect(current.monitors._tag).toBe('Success')
+      if (current.monitors._tag === 'Success') {
+        expect(current.monitors.data[0]?.id).toBe(monitor.id)
+      }
+    }),
+  )
+})
+
+test('a registered event seeds a failed list', () => {
+  const failedModel = evo(makeInitialModel(), {
+    monitors: () => MonitorsAsyncData.Failure({ error: 'network down' }),
+  })
+
+  story(
+    update,
+    given(failedModel),
+    message(Message.GotWatchdogEvent({ event: monitorRegisteredEvent })),
+    model((current) => {
+      expect(current.monitors._tag).toBe('Success')
+      if (current.monitors._tag === 'Success') {
+        expect(current.monitors.data[0]?.id).toBe(monitor.id)
+      }
+    }),
+  )
+})
+
+test('a registered event does not duplicate a monitor already in the list', () => {
+  story(
+    update,
+    given(modelWithMonitors),
+    message(Message.GotWatchdogEvent({ event: monitorRegisteredEvent })),
+    model((current) => {
+      if (current.monitors._tag === 'Success') {
+        expect(current.monitors.data).toHaveLength(1)
+        expect(current.monitors.data[0]?.id).toBe(monitor.id)
+      }
+    }),
+  )
+})
+
+test('an updated event replaces the monitor it carries', () => {
+  story(
+    update,
+    given(modelWithMonitors),
+    message(Message.GotWatchdogEvent({ event: monitorUpdatedEvent })),
+    model((current) => {
+      if (current.monitors._tag === 'Success') {
+        expect(current.monitors.data[0]?.name).toBe(updatedMonitor.name)
+      }
+    }),
+  )
+})
+
+test('an updated event does not seed a loading list', () => {
+  const loadingModel = evo(makeInitialModel(), {
+    monitors: () => MonitorsAsyncData.Loading(),
+  })
+
+  story(
+    update,
+    given(loadingModel),
+    message(Message.GotWatchdogEvent({ event: monitorUpdatedEvent })),
+    model((current) => {
+      expect(current.monitors._tag).toBe('Loading')
+    }),
+  )
+})
+
+test('health events replace the monitor they carry', () => {
+  for (const event of [monitorHealthyEvent, monitorDegradedEvent, monitorHealedEvent]) {
+    story(
+      update,
+      given(modelWithMonitors),
+      message(Message.GotWatchdogEvent({ event })),
+      model((current) => {
+        if (current.monitors._tag === 'Success') {
+          expect(current.monitors.data).toHaveLength(1)
+          expect(current.monitors.data[0]?.name).toBe(updatedMonitor.name)
+        }
+      }),
+    )
+  }
+})
+
+test('a deleted event removes the monitor', () => {
+  story(
+    update,
+    given(modelWithMonitors),
+    message(Message.GotWatchdogEvent({ event: monitorDeletedEvent })),
+    model((current) => {
+      if (current.monitors._tag === 'Success') {
+        expect(current.monitors.data).toHaveLength(0)
+      }
+    }),
+  )
+})
+
+test('a notification target event leaves the monitor list untouched', () => {
+  story(
+    update,
+    given(modelWithMonitors),
+    message(Message.GotWatchdogEvent({ event: notificationTargetAddedEvent })),
+    model((current) => {
+      if (current.monitors._tag === 'Success') {
+        expect(current.monitors.data).toHaveLength(1)
         expect(current.monitors.data[0]?.id).toBe(monitor.id)
       }
     }),

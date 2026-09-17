@@ -13,6 +13,7 @@ import * as MonitorStreams from './MonitorStreams'
 import * as NotificationTargetRepository from './NotificationTargetRepository'
 import * as NotificationWorker from './NotificationWorker'
 import * as WatchdogEvents from './WatchdogEvents'
+import * as WatchdogRpc from './WatchdogRpc'
 import { OpenAiClient, OpenAiLanguageModel } from '@effect/ai-openai'
 
 const application = Layer.unwrap(
@@ -70,7 +71,10 @@ const application = Layer.unwrap(
       Layer.provide(status),
     )
     const webApp = HttpStaticServer.layer({ root: staticRoot, spa: true })
-    const served = HttpRouter.serve(Layer.mergeAll(webApp, api)).pipe(
+    // The RPC socket streams the same bus the API publishes to, so provide the
+    // one shared `events` layer instead of building a second instance.
+    const rpc = WatchdogRpc.layer.pipe(Layer.provide(events))
+    const served = HttpRouter.serve(Layer.mergeAll(webApp, api, rpc)).pipe(
       Layer.provide(BunHttpServer.layer({ port })),
     )
 

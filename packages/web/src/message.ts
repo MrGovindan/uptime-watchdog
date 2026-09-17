@@ -1,4 +1,11 @@
-import { HttpMethod, Monitor, MonitorId, MonitorName, Protocol } from '@uptime-watchdog/common'
+import {
+  HttpMethod,
+  Monitor,
+  MonitorId,
+  MonitorName,
+  Protocol,
+  WatchdogEvent,
+} from '@uptime-watchdog/common'
 import { Dialog } from '@foldkit/ui'
 import { Schema } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
@@ -51,6 +58,8 @@ export const Message = defineMessageUnion({
   GotCronHelpMessage: { message: CronHelp.Message },
 
   GotToastMessage: { message: Toast.Message },
+
+  GotWatchdogEvent: { event: WatchdogEvent },
 })
 
 export type Message = typeof Message.Type

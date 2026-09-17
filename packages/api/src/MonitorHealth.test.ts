@@ -5,6 +5,7 @@ import { DateTime, Duration, Effect, Layer, Option, Queue, Result, Schema, Strea
 import * as MonitorStreams from './MonitorStreams'
 import * as HealthService from './MonitorHealth'
 import * as WatchdogEvents from './WatchdogEvents'
+import { type WatchdogEvent } from '@uptime-watchdog/common'
 
 const monitor = Effect.runSync(
   Schema.decodeUnknownEffect(Monitor.json)({
@@ -48,7 +49,7 @@ const makeEnvironment = () => {
 
 const subscribe = (events: WatchdogEvents.Interface) =>
   Effect.gen(function* () {
-    const collected = yield* Queue.unbounded<WatchdogEvents.WatchdogEvent>()
+    const collected = yield* Queue.unbounded<WatchdogEvent>()
     const forEach = events.stream.pipe(
       Stream.runForEach((event) => Queue.offer(collected, event).pipe(Effect.asVoid)),
     )
