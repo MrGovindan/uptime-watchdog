@@ -185,7 +185,7 @@ describe('watchdog events websocket', () => {
   )
 
   it.live(
-    'pushes health transitions derived from observations',
+    'pushes a health snapshot for each observation',
     () =>
       withServer((port, observations) =>
         Effect.gen(function* () {
@@ -222,7 +222,7 @@ describe('watchdog events websocket', () => {
             yield* observationFor(port, MonitorId.make(monitorId), 200),
           )
           expect(yield* nextEvent(received)).toMatchObject({
-            _tag: 'MonitorHealed',
+            _tag: 'MonitorHealthy',
             monitor: { id: monitorId },
             health: { _tag: 'Healthy', response: { status: 200 } },
           })

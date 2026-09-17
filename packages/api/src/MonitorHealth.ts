@@ -11,24 +11,10 @@ export interface Interface {
 
 export class MonitorHealth extends Context.Service<MonitorHealth, Interface>()('MonitorHealth') {}
 
-const transitionEvent = (
-  previousTag: Option.Option<MonitorHealthState['_tag']>,
-  monitor: Monitor,
-  health: MonitorHealthState,
-): Option.Option<WatchdogEvent> =>
-  Option.match(previousTag, {
-    onNone: () =>
-      health._tag === 'Healthy'
-        ? Option.some<WatchdogEvent>({ _tag: 'MonitorHealthy', monitor, health })
-        : Option.some({ _tag: 'MonitorDegraded', monitor, health }),
-    onSome: (previous) => {
-      if (previous === health._tag) return Option.none()
-      if (previous === 'Healthy') {
-        return Option.some<WatchdogEvent>({ _tag: 'MonitorDegraded', monitor, health })
-      }
-      return Option.some<WatchdogEvent>({ _tag: 'MonitorHealed', monitor, health })
-    },
-  })
+const healthEvent = (monitor: Monitor, health: MonitorHealthState): WatchdogEvent =>
+  health._tag === 'Healthy'
+    ? { _tag: 'MonitorHealthy', monitor, health }
+    : { _tag: 'MonitorDegraded', monitor, health }
 
 const make = Effect.gen(function* () {
   const streams = yield* MonitorStreams.MonitorStreams
@@ -37,19 +23,11 @@ const make = Effect.gen(function* () {
 
   yield* streams.observations.pipe(
     Stream.runForEach((observed) =>
-      Ref.modify(healths, (current) => {
+      Effect.gen(function* () {
         const health = toMonitorHealth(observed.observation, observed.monitor.expectedStatus)
-        const previousTag = Option.map(HashMap.get(current, observed.monitor.id), (h) => h._tag)
-        const event = transitionEvent(previousTag, observed.monitor, health)
-        return [event, HashMap.set(current, observed.monitor.id, health)]
-      }).pipe(
-        Effect.flatMap(
-          Option.match({
-            onNone: () => Effect.void,
-            onSome: (event) => events.publish(event),
-          }),
-        ),
-      ),
+        yield* Ref.update(healths, (current) => HashMap.set(current, observed.monitor.id, health))
+        yield* events.publish(healthEvent(observed.monitor, health))
+      }),
     ),
     Effect.forkScoped,
   )
@@ -66,7 +44,6 @@ const make = Effect.gen(function* () {
         NotificationTargetRemoved: () => Effect.void,
         MonitorHealthy: () => Effect.void,
         MonitorDegraded: () => Effect.void,
-        MonitorHealed: () => Effect.void,
       }),
     ),
     Effect.forkScoped,

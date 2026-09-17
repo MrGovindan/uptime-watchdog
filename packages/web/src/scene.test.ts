@@ -7,7 +7,9 @@ import { describe, test } from 'vitest'
 import {
   modelReadyToCreate,
   modelReadyToEdit,
+  modelWithDegradedMonitor,
   modelWithEmptyList,
+  modelWithHealthyMonitor,
   modelWithMonitors,
   modelWithOpenDialog,
   monitor,
@@ -72,6 +74,33 @@ describe('view', () => {
       expect(text('Name is required')).toExist(),
       expect(text('Hostname is required')).toExist(),
       expect(text('Enter a valid cron expression')).toExist(),
+    )
+  })
+
+  test('shows a healthy indicator with the status and response time', () => {
+    scene(
+      { update, view },
+      given(modelWithHealthyMonitor),
+      expect(text('Healthy')).toExist(),
+      expect(text('200 in 5ms')).toExist(),
+    )
+  })
+
+  test('shows a pending indicator before the first check', () => {
+    scene(
+      { update, view },
+      given(modelWithMonitors),
+      expect(text('Awaiting first check')).toExist(),
+    )
+  })
+
+  test('shows a degraded indicator with the reason and response details', () => {
+    scene(
+      { update, view },
+      given(modelWithDegradedMonitor),
+      expect(text('Degraded')).toExist(),
+      expect(text('Expected 200, got 503')).toExist(),
+      expect(text('Response details')).toExist(),
     )
   })
 

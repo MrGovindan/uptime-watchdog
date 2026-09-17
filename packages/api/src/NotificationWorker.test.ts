@@ -207,24 +207,38 @@ describe('NotificationWorker', () => {
     }).pipe(Effect.provide(layer))
   })
 
-  it.effect('notifies targets when a monitor heals and not for steady health', () => {
+  it.effect('notifies only on health transitions, not on every snapshot', () => {
     const { layer, messages } = makeLayers()
 
     return Effect.gen(function* () {
       const created = yield* registerWithTarget(messages)
-
       const events = yield* WatchdogEvents.WatchdogEvents
 
       yield* events.publish({ _tag: 'MonitorHealthy', monitor: created, health: healthyHealth })
       yield* Effect.yieldNow
       expect(Option.isNone(yield* Queue.poll(messages))).toBe(true)
 
-      yield* events.publish({ _tag: 'MonitorHealed', monitor: created, health: healthyHealth })
+      yield* events.publish({ _tag: 'MonitorDegraded', monitor: created, health: degradedHealth })
+      yield* Effect.yieldNow
+      expect(yield* Queue.take(messages)).toEqual({
+        userId: mattermostUser.id,
+        message: NotificationMessages.monitorDegraded('Prod API'),
+      })
+
+      yield* events.publish({ _tag: 'MonitorDegraded', monitor: created, health: degradedHealth })
+      yield* Effect.yieldNow
+      expect(Option.isNone(yield* Queue.poll(messages))).toBe(true)
+
+      yield* events.publish({ _tag: 'MonitorHealthy', monitor: created, health: healthyHealth })
       yield* Effect.yieldNow
       expect(yield* Queue.take(messages)).toEqual({
         userId: mattermostUser.id,
         message: NotificationMessages.monitorHealed('Prod API'),
       })
+
+      yield* events.publish({ _tag: 'MonitorHealthy', monitor: created, health: healthyHealth })
+      yield* Effect.yieldNow
+      expect(Option.isNone(yield* Queue.poll(messages))).toBe(true)
     }).pipe(Effect.provide(layer))
   })
 

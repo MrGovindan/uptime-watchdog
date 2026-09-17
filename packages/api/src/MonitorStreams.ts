@@ -53,7 +53,6 @@ const make = Effect.gen(function* () {
         NotificationTargetRemoved: () => Effect.void,
         MonitorHealthy: () => Effect.void,
         MonitorDegraded: () => Effect.void,
-        MonitorHealed: () => Effect.void,
       }),
     ),
     Effect.forkScoped,

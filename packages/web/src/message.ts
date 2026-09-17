@@ -3,6 +3,7 @@ import {
   Monitor,
   MonitorId,
   MonitorName,
+  MonitorWithHealth,
   Protocol,
   WatchdogEvent,
 } from '@uptime-watchdog/common'
@@ -15,7 +16,7 @@ import * as NotificationTargets from './notificationTargets'
 import { Toast } from './toast'
 
 export const Message = defineMessageUnion({
-  CompletedListMonitors: { monitors: Schema.Array(Monitor) },
+  CompletedListMonitors: { monitors: Schema.Array(MonitorWithHealth) },
   FailedListMonitors: { error: Schema.String },
   ClickedRetryListMonitors: {},
 

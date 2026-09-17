@@ -1,4 +1,4 @@
-import { Monitor, MonitorId } from '@uptime-watchdog/common'
+import { Monitor, MonitorId, MonitorWithHealth } from '@uptime-watchdog/common'
 import { Dialog } from '@foldkit/ui'
 import { Option, Schema } from 'effect'
 import { AsyncData } from 'foldkit'
@@ -8,7 +8,7 @@ import * as NotificationTargets from './notificationTargets'
 import { Form, makeInitialForm } from './monitorForm'
 import { Toast } from './toast'
 
-export const MonitorsAsyncData = AsyncData.Schema(Schema.Array(Monitor), Schema.String)
+export const MonitorsAsyncData = AsyncData.Schema(Schema.Array(MonitorWithHealth), Schema.String)
 
 export const Model = Schema.Struct({
   monitors: MonitorsAsyncData.schema,

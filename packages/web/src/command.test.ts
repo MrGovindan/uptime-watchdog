@@ -69,7 +69,7 @@ describe('ListMonitors', () => {
     expect(message._tag).toBe('CompletedListMonitors')
     if (message._tag === 'CompletedListMonitors') {
       expect(message.monitors).toHaveLength(1)
-      expect(message.monitors[0]?.request.hostname).toBe('example.com')
+      expect(message.monitors[0]?.monitor.request.hostname).toBe('example.com')
     }
   })
 

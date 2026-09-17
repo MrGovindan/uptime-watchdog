@@ -78,7 +78,7 @@ const waitForSome = <Some, None>(
   )
 
 describe('MonitorHealth', () => {
-  it.effect('publishes healthy, degraded, and healed transitions', () => {
+  it.effect('publishes a health snapshot for every observation', () => {
     const env = makeEnvironment()
     return Effect.gen(function* () {
       const { delivered } = yield* withEvents
@@ -90,19 +90,17 @@ describe('MonitorHealth', () => {
         health: { _tag: 'Healthy', response: { status: 200 } },
       })
 
+      yield* Queue.offer(env.observations, observation(200))
+      expect(yield* Queue.take(delivered)).toMatchObject({ _tag: 'MonitorHealthy' })
+
       yield* Queue.offer(env.observations, observation(500))
       expect(yield* Queue.take(delivered)).toMatchObject({
         _tag: 'MonitorDegraded',
         health: { _tag: 'Degraded', reason: { _tag: 'Unexpected', response: { status: 500 } } },
       })
 
-      yield* Queue.offer(env.observations, observation(200))
-      expect(yield* Queue.take(delivered)).toMatchObject({
-        _tag: 'MonitorHealed',
-        health: { _tag: 'Healthy' },
-      })
-
-      expect(Option.isNone(yield* Queue.poll(delivered))).toBe(true)
+      yield* Queue.offer(env.observations, observation(500))
+      expect(yield* Queue.take(delivered)).toMatchObject({ _tag: 'MonitorDegraded' })
     }).pipe(Effect.provide(env.layer))
   })
 
@@ -114,19 +112,6 @@ describe('MonitorHealth', () => {
       yield* Queue.offer(env.observations, observation(503))
       expect(yield* Queue.take(delivered)).toMatchObject({ _tag: 'MonitorDegraded' })
 
-      expect(Option.isNone(yield* Queue.poll(delivered))).toBe(true)
-    }).pipe(Effect.provide(env.layer))
-  })
-
-  it.effect('does not republish when the health state does not change', () => {
-    const env = makeEnvironment()
-    return Effect.gen(function* () {
-      const { delivered } = yield* withEvents
-
-      yield* Queue.offer(env.observations, observation(200))
-      expect(yield* Queue.take(delivered)).toMatchObject({ _tag: 'MonitorHealthy' })
-
-      yield* Queue.offer(env.observations, observation(200))
       expect(Option.isNone(yield* Queue.poll(delivered))).toBe(true)
     }).pipe(Effect.provide(env.layer))
   })

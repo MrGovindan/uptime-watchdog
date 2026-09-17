@@ -11,6 +11,5 @@ export const WatchdogEvent = Schema.TaggedUnion({
   NotificationTargetRemoved: { monitor: Monitor, target: NotificationTarget },
   MonitorHealthy: { monitor: Monitor, health: MonitorHealth },
   MonitorDegraded: { monitor: Monitor, health: MonitorHealth },
-  MonitorHealed: { monitor: Monitor, health: MonitorHealth },
 })
 export type WatchdogEvent = typeof WatchdogEvent.Type

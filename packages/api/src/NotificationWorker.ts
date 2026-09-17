@@ -1,5 +1,11 @@
-import { type MattermostUserId, type NotificationTarget } from '@uptime-watchdog/common'
-import { Array, Context, Effect, Layer, Schedule, Stream } from 'effect'
+import {
+  type MattermostUserId,
+  type Monitor,
+  type MonitorHealth,
+  type MonitorId,
+  type NotificationTarget,
+} from '@uptime-watchdog/common'
+import { Array, Context, Effect, HashMap, Layer, Option, Ref, Schedule, Stream } from 'effect'
 import { Mattermost } from './Mattermost'
 import * as NotificationMessages from './NotificationMessages'
 import { NotificationTargetRepository } from './NotificationTargetRepository'
@@ -30,14 +36,28 @@ const make = Effect.gen(function* () {
   const events = yield* WatchdogEvents
   const mattermost = yield* Mattermost
   const targets = yield* NotificationTargetRepository
+  const healthStates = yield* Ref.make(HashMap.empty<MonitorId, MonitorHealth['_tag']>())
+
+  const notifyTargets = (monitor: Monitor, message: string) =>
+    targets
+      .list(monitor.id)
+      .pipe(Effect.map((healthTargets) => targetDeliveries(healthTargets, message)))
+
+  // Health events are snapshots published on every check; a notification is only
+  // warranted when the tag differs from the previous observation.
+  const recordHealth = (monitor: Monitor, tag: MonitorHealth['_tag']) =>
+    Ref.modify(healthStates, (current) => [
+      HashMap.get(current, monitor.id),
+      HashMap.set(current, monitor.id, tag),
+    ])
 
   const deliveries = (event: WatchdogEvent): Effect.Effect<ReadonlyArray<Delivery>> =>
     WatchdogEvent.match(event, {
       MonitorRegistered: () => Effect.succeed([]),
       MonitorUpdated: () => Effect.succeed([]),
       MonitorDeleted: ({ monitor, targets }) =>
-        Effect.succeed(
-          targetDeliveries(targets, NotificationMessages.monitorDeleted(monitor.name)),
+        Ref.update(healthStates, (current) => HashMap.remove(current, monitor.id)).pipe(
+          Effect.as(targetDeliveries(targets, NotificationMessages.monitorDeleted(monitor.name))),
         ),
       NotificationTargetAdded: ({ monitor, target }) =>
         Effect.succeed([
@@ -53,23 +73,22 @@ const make = Effect.gen(function* () {
             message: NotificationMessages.removedFromMonitor(monitor.name),
           },
         ]),
-      MonitorHealthy: () => Effect.succeed([]),
+      MonitorHealthy: ({ monitor }) =>
+        recordHealth(monitor, 'Healthy').pipe(
+          Effect.flatMap((previous) =>
+            Option.exists(previous, (tag) => tag === 'Degraded')
+              ? notifyTargets(monitor, NotificationMessages.monitorHealed(monitor.name))
+              : Effect.succeed([]),
+          ),
+        ),
       MonitorDegraded: ({ monitor }) =>
-        targets
-          .list(monitor.id)
-          .pipe(
-            Effect.map((healthTargets) =>
-              targetDeliveries(healthTargets, NotificationMessages.monitorDegraded(monitor.name)),
-            ),
+        recordHealth(monitor, 'Degraded').pipe(
+          Effect.flatMap((previous) =>
+            Option.exists(previous, (tag) => tag === 'Degraded')
+              ? Effect.succeed([])
+              : notifyTargets(monitor, NotificationMessages.monitorDegraded(monitor.name)),
           ),
-      MonitorHealed: ({ monitor }) =>
-        targets
-          .list(monitor.id)
-          .pipe(
-            Effect.map((healthTargets) =>
-              targetDeliveries(healthTargets, NotificationMessages.monitorHealed(monitor.name)),
-            ),
-          ),
+        ),
     })
 
   const deliver = (event: WatchdogEvent): Effect.Effect<void> =>

@@ -1,4 +1,10 @@
-import { Monitor, MonitorId, WatchdogEvent } from '@uptime-watchdog/common'
+import {
+  Monitor,
+  MonitorHealth,
+  MonitorId,
+  MonitorWithHealth,
+  WatchdogEvent,
+} from '@uptime-watchdog/common'
 import { Array, Option } from 'effect'
 import { AsyncData, Update } from 'foldkit'
 import { NotValidated } from 'foldkit/fieldValidation'
@@ -27,13 +33,21 @@ import { type Model, MonitorsAsyncData } from './model'
 
 // MONITOR LIST
 
-const upsertMonitor = (model: Model, monitor: Monitor): Model => {
-  const existing = Option.getOrElse(AsyncData.getData(model.monitors), () => [])
-  const data = Array.some(existing, (current) => current.id === monitor.id)
-    ? Array.map(existing, (current) => (current.id === monitor.id ? monitor : current))
-    : [monitor, ...existing]
+const monitorEntries = (model: Model): ReadonlyArray<MonitorWithHealth> =>
+  Option.getOrElse(AsyncData.getData(model.monitors), () => [])
 
-  return evo(model, { monitors: () => MonitorsAsyncData.Success({ data }) })
+const withMonitorData = (model: Model, data: ReadonlyArray<MonitorWithHealth>): Model =>
+  evo(model, { monitors: () => MonitorsAsyncData.Success({ data }) })
+
+const upsertMonitor = (model: Model, monitor: Monitor): Model => {
+  const existing = monitorEntries(model)
+  const data = Array.some(existing, (entry) => entry.monitor.id === monitor.id)
+    ? Array.map(existing, (entry) =>
+        entry.monitor.id === monitor.id ? { monitor, health: entry.health } : entry,
+      )
+    : [{ monitor, health: Option.none() }, ...existing]
+
+  return withMonitorData(model, data)
 }
 
 const replaceMonitor = (model: Model, monitor: Monitor): Model => {
@@ -41,10 +55,27 @@ const replaceMonitor = (model: Model, monitor: Monitor): Model => {
     return model
   }
 
-  const existing = Option.getOrElse(AsyncData.getData(model.monitors), () => [])
-  const data = Array.map(existing, (current) => (current.id === monitor.id ? monitor : current))
+  const data = Array.map(monitorEntries(model), (entry) =>
+    entry.monitor.id === monitor.id ? { monitor, health: entry.health } : entry,
+  )
 
-  return evo(model, { monitors: () => MonitorsAsyncData.Success({ data }) })
+  return withMonitorData(model, data)
+}
+
+const updateMonitorHealth = (
+  model: Model,
+  monitor: Monitor,
+  health: Option.Option<MonitorHealth>,
+): Model => {
+  if (!AsyncData.hasData(model.monitors)) {
+    return model
+  }
+
+  const data = Array.map(monitorEntries(model), (entry) =>
+    entry.monitor.id === monitor.id ? { monitor, health } : entry,
+  )
+
+  return withMonitorData(model, data)
 }
 
 const removeMonitor = (model: Model, monitorId: MonitorId): Model => {
@@ -52,22 +83,23 @@ const removeMonitor = (model: Model, monitorId: MonitorId): Model => {
     return model
   }
 
-  const existing = Option.getOrElse(AsyncData.getData(model.monitors), () => [])
-  const data = Array.filter(existing, (current) => current.id !== monitorId)
+  const data = Array.filter(monitorEntries(model), (entry) => entry.monitor.id !== monitorId)
 
-  return evo(model, { monitors: () => MonitorsAsyncData.Success({ data }) })
+  return withMonitorData(model, data)
 }
 
 // Watchdog events patch the list in place. Registration seeds the list even
-// while it is still loading; later events replace the monitor they carry.
+// while it is still loading; monitor events replace the monitor they carry
+// while preserving its health, health events carry the latest observation.
 const foldWatchdogEvent = (model: Model, event: WatchdogEvent): Model =>
   WatchdogEvent.match(event, {
     MonitorRegistered: ({ monitor }) => upsertMonitor(model, monitor),
     MonitorUpdated: ({ monitor }) => replaceMonitor(model, monitor),
     MonitorDeleted: ({ monitor }) => removeMonitor(model, monitor.id),
-    MonitorHealthy: ({ monitor }) => replaceMonitor(model, monitor),
-    MonitorDegraded: ({ monitor }) => replaceMonitor(model, monitor),
-    MonitorHealed: ({ monitor }) => replaceMonitor(model, monitor),
+    MonitorHealthy: ({ monitor, health }) =>
+      updateMonitorHealth(model, monitor, Option.some(health)),
+    MonitorDegraded: ({ monitor, health }) =>
+      updateMonitorHealth(model, monitor, Option.some(health)),
     NotificationTargetAdded: () => model,
     NotificationTargetRemoved: () => model,
   })

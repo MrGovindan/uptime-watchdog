@@ -13,16 +13,17 @@ import {
   modelReadyToCreate,
   modelReadyToEdit,
   modelWithEmptyList,
+  modelWithHealthyMonitor,
   modelWithMonitors,
   modelWithOpenDialog,
   monitor,
   monitorDegradedEvent,
   monitorDeletedEvent,
-  monitorHealedEvent,
   monitorHealthyEvent,
   monitorRegisteredEvent,
   monitorUpdatedEvent,
   notificationTargetAddedEvent,
+  pendingMonitor,
   updatedMonitor,
 } from './fixtures'
 
@@ -35,7 +36,7 @@ test('completed list replaces the loading state', () => {
   story(
     update,
     given(makeInitialModel()),
-    message(Message.CompletedListMonitors({ monitors: [monitor] })),
+    message(Message.CompletedListMonitors({ monitors: [pendingMonitor] })),
     model((current) => {
       expect(current.monitors._tag).toBe('Success')
     }),
@@ -120,7 +121,7 @@ test('submitting a valid form registers the monitor, closes, and resets', () => 
     model((current) => {
       expect(current.monitors._tag).toBe('Success')
       if (current.monitors._tag === 'Success') {
-        expect(current.monitors.data[0]?.id).toBe(monitor.id)
+        expect(current.monitors.data[0]?.monitor.id).toBe(monitor.id)
       }
     }),
   )
@@ -161,8 +162,8 @@ test('submitting the edit form dispatches an update and replaces the monitor', (
     model((current) => {
       expect(current.monitors._tag).toBe('Success')
       if (current.monitors._tag === 'Success') {
-        expect(current.monitors.data[0]?.name).toBe('Renamed API')
-        expect(current.monitors.data[0]?.id).toBe(monitor.id)
+        expect(current.monitors.data[0]?.monitor.name).toBe('Renamed API')
+        expect(current.monitors.data[0]?.monitor.id).toBe(monitor.id)
       }
       expect(current.toast.entries[0]?.variant).toBe('Success')
     }),
@@ -326,7 +327,7 @@ test('a monitor created before the list loads still lands in the list', () => {
     model((current) => {
       expect(current.monitors._tag).toBe('Success')
       if (current.monitors._tag === 'Success') {
-        expect(current.monitors.data[0]?.id).toBe(monitor.id)
+        expect(current.monitors.data[0]?.monitor.id).toBe(monitor.id)
       }
     }),
   )
@@ -344,7 +345,7 @@ test('a registered event seeds a loading list', () => {
     model((current) => {
       expect(current.monitors._tag).toBe('Success')
       if (current.monitors._tag === 'Success') {
-        expect(current.monitors.data[0]?.id).toBe(monitor.id)
+        expect(current.monitors.data[0]?.monitor.id).toBe(monitor.id)
       }
     }),
   )
@@ -362,7 +363,7 @@ test('a registered event seeds a failed list', () => {
     model((current) => {
       expect(current.monitors._tag).toBe('Success')
       if (current.monitors._tag === 'Success') {
-        expect(current.monitors.data[0]?.id).toBe(monitor.id)
+        expect(current.monitors.data[0]?.monitor.id).toBe(monitor.id)
       }
     }),
   )
@@ -376,7 +377,7 @@ test('a registered event does not duplicate a monitor already in the list', () =
     model((current) => {
       if (current.monitors._tag === 'Success') {
         expect(current.monitors.data).toHaveLength(1)
-        expect(current.monitors.data[0]?.id).toBe(monitor.id)
+        expect(current.monitors.data[0]?.monitor.id).toBe(monitor.id)
       }
     }),
   )
@@ -389,7 +390,7 @@ test('an updated event replaces the monitor it carries', () => {
     message(Message.GotWatchdogEvent({ event: monitorUpdatedEvent })),
     model((current) => {
       if (current.monitors._tag === 'Success') {
-        expect(current.monitors.data[0]?.name).toBe(updatedMonitor.name)
+        expect(current.monitors.data[0]?.monitor.name).toBe(updatedMonitor.name)
       }
     }),
   )
@@ -410,8 +411,11 @@ test('an updated event does not seed a loading list', () => {
   )
 })
 
-test('health events replace the monitor they carry', () => {
-  for (const event of [monitorHealthyEvent, monitorDegradedEvent, monitorHealedEvent]) {
+test('health events set the health they carry', () => {
+  for (const [event, tag] of [
+    [monitorHealthyEvent, 'Healthy'],
+    [monitorDegradedEvent, 'Degraded'],
+  ] as const) {
     story(
       update,
       given(modelWithMonitors),
@@ -419,11 +423,50 @@ test('health events replace the monitor they carry', () => {
       model((current) => {
         if (current.monitors._tag === 'Success') {
           expect(current.monitors.data).toHaveLength(1)
-          expect(current.monitors.data[0]?.name).toBe(updatedMonitor.name)
+          expect(current.monitors.data[0]?.monitor.name).toBe(updatedMonitor.name)
+          expect(current.monitors.data[0]?.health._tag).toBe('Some')
+          const health = current.monitors.data[0]?.health
+          if (health?._tag === 'Some') {
+            expect(health.value._tag).toBe(tag)
+          }
         }
       }),
     )
   }
+})
+
+test('a monitor event preserves the health already on the monitor', () => {
+  story(
+    update,
+    given(modelWithHealthyMonitor),
+    message(Message.GotWatchdogEvent({ event: monitorUpdatedEvent })),
+    model((current) => {
+      if (current.monitors._tag === 'Success') {
+        expect(current.monitors.data[0]?.monitor.name).toBe(updatedMonitor.name)
+        expect(current.monitors.data[0]?.health._tag).toBe('Some')
+      }
+    }),
+  )
+})
+
+test('a completed update preserves the health already on the monitor', () => {
+  story(
+    update,
+    given(modelWithHealthyMonitor),
+    message(Message.CompletedUpdateMonitor({ monitor: updatedMonitor })),
+    Command.expectHas(UiToast.WaitBeforeDismissal, Animation.WaitForPaint),
+    Command.resolveAll(
+      [UiToast.WaitBeforeDismissal, completedWaitBeforeDismissal],
+      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()],
+      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation()],
+    ),
+    model((current) => {
+      if (current.monitors._tag === 'Success') {
+        expect(current.monitors.data[0]?.monitor.name).toBe('Renamed API')
+        expect(current.monitors.data[0]?.health._tag).toBe('Some')
+      }
+    }),
+  )
 })
 
 test('a deleted event removes the monitor', () => {
@@ -447,7 +490,7 @@ test('a notification target event leaves the monitor list untouched', () => {
     model((current) => {
       if (current.monitors._tag === 'Success') {
         expect(current.monitors.data).toHaveLength(1)
-        expect(current.monitors.data[0]?.id).toBe(monitor.id)
+        expect(current.monitors.data[0]?.monitor.id).toBe(monitor.id)
       }
     }),
   )

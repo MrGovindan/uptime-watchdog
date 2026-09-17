@@ -1,6 +1,7 @@
 import {
   type MonitorHealth,
   Monitor,
+  MonitorWithHealth,
   type NotificationTarget,
   WatchdogEvent,
 } from '@uptime-watchdog/common'
@@ -29,12 +30,39 @@ export const monitorJson = {
 
 export const monitor = Schema.decodeSync(Monitor.json)(monitorJson)
 
+const healthy: MonitorHealth = {
+  _tag: 'Healthy',
+  time: DateTime.nowUnsafe(),
+  response: { duration: Duration.millis(5), status: 200, body: 'pong' },
+}
+
+const degraded: MonitorHealth = {
+  _tag: 'Degraded',
+  time: DateTime.nowUnsafe(),
+  reason: {
+    _tag: 'Unexpected',
+    response: { duration: Duration.millis(5), status: 503, body: 'down' },
+  },
+}
+
+export const pendingMonitor: MonitorWithHealth = { monitor, health: Option.none() }
+export const healthyMonitor: MonitorWithHealth = { monitor, health: Option.some(healthy) }
+export const degradedMonitor: MonitorWithHealth = { monitor, health: Option.some(degraded) }
+
 export const modelWithEmptyList = evo(makeInitialModel(), {
   monitors: () => MonitorsAsyncData.Success({ data: [] }),
 })
 
 export const modelWithMonitors = evo(makeInitialModel(), {
-  monitors: () => MonitorsAsyncData.Success({ data: [monitor] }),
+  monitors: () => MonitorsAsyncData.Success({ data: [pendingMonitor] }),
+})
+
+export const modelWithHealthyMonitor = evo(makeInitialModel(), {
+  monitors: () => MonitorsAsyncData.Success({ data: [healthyMonitor] }),
+})
+
+export const modelWithDegradedMonitor = evo(makeInitialModel(), {
+  monitors: () => MonitorsAsyncData.Success({ data: [degradedMonitor] }),
 })
 
 export const modelWithOpenDialog = evo(modelWithEmptyList, {
@@ -70,21 +98,6 @@ export const modelReadyToEdit = evo(modelWithMonitors, {
   }),
 })
 
-const healthy: MonitorHealth = {
-  _tag: 'Healthy',
-  time: DateTime.nowUnsafe(),
-  response: { duration: Duration.millis(5), status: 200, body: 'pong' },
-}
-
-const degraded: MonitorHealth = {
-  _tag: 'Degraded',
-  time: DateTime.nowUnsafe(),
-  reason: {
-    _tag: 'Unexpected',
-    response: { duration: Duration.millis(5), status: 503, body: 'down' },
-  },
-}
-
 const notificationTarget: NotificationTarget = {
   monitorId: monitor.id,
   mattermostUserId: 'mm-jesse',
@@ -112,11 +125,6 @@ export const monitorDegradedEvent: WatchdogEvent = {
   _tag: 'MonitorDegraded',
   monitor: updatedMonitor,
   health: degraded,
-}
-export const monitorHealedEvent: WatchdogEvent = {
-  _tag: 'MonitorHealed',
-  monitor: updatedMonitor,
-  health: healthy,
 }
 export const notificationTargetAddedEvent: WatchdogEvent = {
   _tag: 'NotificationTargetAdded',
