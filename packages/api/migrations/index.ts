@@ -7,8 +7,7 @@ const migrations = [
   ['202609141200_create_notification_target', createNotificationTarget],
 ] as const
 
-const MigrationOrdering = <T>() =>
-  Order.make<readonly [string, T]>((a, b) => String.Order(a[0], b[0]))
+const MigrationOrdering = <T>() => Order.make<readonly [string, T]>((a, b) => String.Order(a[0], b[0]))
 
 const sortedMigrations = Array.sort(migrations, MigrationOrdering())
 

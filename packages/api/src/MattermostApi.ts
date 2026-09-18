@@ -15,10 +15,9 @@ const responseError = <const Tag extends string>(tag: Tag, status: number) =>
         message: Schema.optional(Schema.String),
       }),
       {
-        decode: SchemaGetter.transform<
-          Readonly<{ _tag: Tag; message?: string | undefined }>,
-          MattermostErrorBody
-        >((body) => ({ _tag: tag, message: body.message })),
+        decode: SchemaGetter.transform<Readonly<{ _tag: Tag; message?: string | undefined }>, MattermostErrorBody>(
+          (body) => ({ _tag: tag, message: body.message }),
+        ),
         encode: SchemaGetter.transform<
           Readonly<{ message?: string | undefined }>,
           Readonly<{ _tag: Tag; message?: string | undefined }>

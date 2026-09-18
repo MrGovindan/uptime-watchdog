@@ -1,11 +1,5 @@
 import { BunHttpServer } from '@effect/platform-bun'
-import {
-  type MonitorObservation,
-  Monitor,
-  MonitorId,
-  WatchdogEvent,
-  WatchdogRpcs,
-} from '@uptime-watchdog/common'
+import { type MonitorObservation, Monitor, MonitorId, WatchdogEvent, WatchdogRpcs } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
 import { DateTime, Duration, Effect, Layer, Queue, Result, Schema, Scope, Stream } from 'effect'
 import { HttpRouter } from 'effect/unstable/http'
@@ -19,18 +13,13 @@ import * as WatchdogRpc from './WatchdogRpc'
 const updateJson = { ...definitionJson, name: 'Renamed API' }
 
 const withServer = (
-  run: (
-    port: number,
-    observationQueue: Queue.Queue<MonitorObservation>,
-  ) => Effect.Effect<void, never, Scope.Scope>,
+  run: (port: number, observationQueue: Queue.Queue<MonitorObservation>) => Effect.Effect<void, never, Scope.Scope>,
 ) => {
   const port = 40000 + Math.floor(Math.random() * 20000)
   const { observationQueue, events, monitors, targets, health } = shareDependencies()
 
   const server = HttpRouter.serve(Layer.mergeAll(MonitorApi.layer, WatchdogRpc.layer)).pipe(
-    Layer.provide(
-      Layer.mergeAll(events, monitors, targets, health, mattermostStub(), cronConversionStub()),
-    ),
+    Layer.provide(Layer.mergeAll(events, monitors, targets, health, mattermostStub(), cronConversionStub())),
     Layer.provide(BunHttpServer.layer({ hostname: '127.0.0.1', port })),
   )
 
@@ -83,11 +72,7 @@ const listMonitorsViaHttp = (port: number) =>
     }>
   })
 
-const observationFor = (
-  port: number,
-  monitorId: MonitorId,
-  status: number,
-): Effect.Effect<MonitorObservation> =>
+const observationFor = (port: number, monitorId: MonitorId, status: number): Effect.Effect<MonitorObservation> =>
   listMonitorsViaHttp(port).pipe(
     Effect.flatMap((monitors) =>
       Schema.decodeUnknownEffect(Monitor.json)(
@@ -128,9 +113,7 @@ const connect = (port: number) =>
       Effect.provideService(RpcSerialization.RpcSerialization, RpcSerialization.ndjson),
     )
 
-    return yield* RpcClient.make(WatchdogRpcs).pipe(
-      Effect.provideService(RpcClient.Protocol, protocol),
-    )
+    return yield* RpcClient.make(WatchdogRpcs).pipe(Effect.provideService(RpcClient.Protocol, protocol))
   })
 
 const subscribe = (port: number) =>
@@ -139,9 +122,7 @@ const subscribe = (port: number) =>
     const received = yield* Queue.unbounded<WatchdogEvent>()
 
     yield* Effect.forkScoped(
-      client
-        .events()
-        .pipe(Stream.runForEach((event) => Queue.offer(received, event).pipe(Effect.asVoid))),
+      client.events().pipe(Stream.runForEach((event) => Queue.offer(received, event).pipe(Effect.asVoid))),
     )
 
     // The bus is deltas-only, so events published before the server processes
@@ -194,20 +175,14 @@ describe('watchdog events websocket', () => {
           const monitorId = yield* registerViaHttp(port)
           yield* nextEvent(received)
 
-          yield* Queue.offer(
-            observations,
-            yield* observationFor(port, MonitorId.make(monitorId), 200),
-          )
+          yield* Queue.offer(observations, yield* observationFor(port, MonitorId.make(monitorId), 200))
           expect(yield* nextEvent(received)).toMatchObject({
             _tag: 'MonitorHealthy',
             monitor: { id: monitorId },
             health: { _tag: 'Healthy', response: { status: 200 } },
           })
 
-          yield* Queue.offer(
-            observations,
-            yield* observationFor(port, MonitorId.make(monitorId), 503),
-          )
+          yield* Queue.offer(observations, yield* observationFor(port, MonitorId.make(monitorId), 503))
           expect(yield* nextEvent(received)).toMatchObject({
             _tag: 'MonitorDegraded',
             monitor: { id: monitorId },
@@ -217,10 +192,7 @@ describe('watchdog events websocket', () => {
             },
           })
 
-          yield* Queue.offer(
-            observations,
-            yield* observationFor(port, MonitorId.make(monitorId), 200),
-          )
+          yield* Queue.offer(observations, yield* observationFor(port, MonitorId.make(monitorId), 200))
           expect(yield* nextEvent(received)).toMatchObject({
             _tag: 'MonitorHealthy',
             monitor: { id: monitorId },

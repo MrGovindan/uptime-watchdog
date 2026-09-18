@@ -47,8 +47,7 @@ const watchdogEventSubscriptions = make<Model, Message, ResourcesType>()((entry)
   ),
 }))
 
-export const subscriptions: Subscriptions<Model, Message, ResourcesType> = aggregate<
-  Model,
-  Message,
-  ResourcesType
->()(cronHelpSubscriptions, watchdogEventSubscriptions)
+export const subscriptions: Subscriptions<Model, Message, ResourcesType> = aggregate<Model, Message, ResourcesType>()(
+  cronHelpSubscriptions,
+  watchdogEventSubscriptions,
+)

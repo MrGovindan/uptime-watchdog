@@ -5,11 +5,7 @@ import { expect, test } from 'vitest'
 // These tests exercise the real vdom patch path that the foldkit runtime uses,
 // so they can assert on DOM node identity and focus preservation across view
 // changes — things the VNode-level scene/story tests cannot observe.
-import {
-  __htmlBuilder,
-  __setRuntime,
-  __clearRuntime,
-} from '../../node_modules/foldkit/dist/html/index.js'
+import { __htmlBuilder, __setRuntime, __clearRuntime } from '../../node_modules/foldkit/dist/html/index.js'
 import { Dispatch as DispatchService } from '../../node_modules/foldkit/dist/runtime/dispatch.js'
 import { __patchVNode } from '../../node_modules/foldkit/dist/vdom.js'
 import type { VNode } from '../../node_modules/foldkit/dist/snabbdom/vnode.js'
@@ -52,14 +48,9 @@ const withRuntime = <T>(render: () => T): T => {
   }
 }
 
-const renderRoot = (model: CronHelp.Model): VNode =>
-  withRuntime(() => h.div([], [CronHelp.view(model, h)])) as never
+const renderRoot = (model: CronHelp.Model): VNode => withRuntime(() => h.div([], [CronHelp.view(model, h)])) as never
 
-const patchStep = (
-  container: HTMLElement,
-  maybeCurrent: VNode | null,
-  model: CronHelp.Model,
-): VNode =>
+const patchStep = (container: HTMLElement, maybeCurrent: VNode | null, model: CronHelp.Model): VNode =>
   __patchVNode(
     maybeCurrent === null ? Option.none() : Option.some(maybeCurrent),
     renderRoot(model),

@@ -6,16 +6,11 @@ export interface Interface {
   readonly register: (definition: MonitorDefinition) => Effect.Effect<Monitor>
   readonly list: Effect.Effect<ReadonlyArray<Monitor>>
   readonly find: (id: MonitorId) => Effect.Effect<Option.Option<Monitor>>
-  readonly update: (
-    id: MonitorId,
-    definition: MonitorDefinition,
-  ) => Effect.Effect<Option.Option<Monitor>>
+  readonly update: (id: MonitorId, definition: MonitorDefinition) => Effect.Effect<Option.Option<Monitor>>
   readonly delete: (id: MonitorId) => Effect.Effect<Option.Option<Monitor>>
 }
 
-export class MonitorRepository extends Context.Service<MonitorRepository, Interface>()(
-  'MonitorRepository',
-) {}
+export class MonitorRepository extends Context.Service<MonitorRepository, Interface>()('MonitorRepository') {}
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
@@ -26,9 +21,7 @@ const make = Effect.gen(function* () {
     spanPrefix: 'MonitorRepository',
   })
 
-  const register = Effect.fn('MonitorRepository.register')(function* (
-    definition: MonitorDefinition,
-  ) {
+  const register = Effect.fn('MonitorRepository.register')(function* (definition: MonitorDefinition) {
     const monitor = yield* model
       .insert(
         Monitor.insert.make({
@@ -59,10 +52,7 @@ const make = Effect.gen(function* () {
         sql`SELECT id, name, request, cronSchedule, expectedStatus, createdAt FROM monitor WHERE id = ${id} LIMIT 1`,
     })({ id }).pipe(Effect.orDie)
 
-  const update = (
-    id: MonitorId,
-    definition: MonitorDefinition,
-  ): Effect.Effect<Option.Option<Monitor>> =>
+  const update = (id: MonitorId, definition: MonitorDefinition): Effect.Effect<Option.Option<Monitor>> =>
     SqlSchema.findOneOption({
       Request: Monitor.update,
       Result: Monitor,

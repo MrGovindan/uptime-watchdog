@@ -1,17 +1,6 @@
 import { MonitorDefinition } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
-import {
-  Context,
-  Duration,
-  Effect,
-  Fiber,
-  Layer,
-  Option,
-  Ref,
-  Result,
-  Schema,
-  Stream,
-} from 'effect'
+import { Context, Duration, Effect, Fiber, Layer, Option, Ref, Result, Schema, Stream } from 'effect'
 import { TestClock } from 'effect/testing'
 import { HttpClient, HttpClientResponse } from 'effect/unstable/http'
 import * as CheckUptime from './CheckUptime'
@@ -63,9 +52,7 @@ const makeLayers = (seed: boolean) => {
   const repository = MonitorRepository.layer.pipe(Layer.provide(database))
   const seeded = seed
     ? repository.pipe(
-        Layer.tap((context) =>
-          Context.get(context, MonitorRepository.MonitorRepository).register(definition),
-        ),
+        Layer.tap((context) => Context.get(context, MonitorRepository.MonitorRepository).register(definition)),
       )
     : repository
   const streams = MonitorStreams.layer.pipe(
@@ -84,11 +71,7 @@ describe('MonitorStreams', () => {
       const streams = yield* MonitorStreams.MonitorStreams
       const repository = yield* MonitorRepository.MonitorRepository
       const events = yield* WatchdogEvents.WatchdogEvents
-      const collected = yield* streams.observations.pipe(
-        Stream.take(1),
-        Stream.runCollect,
-        Effect.forkChild,
-      )
+      const collected = yield* streams.observations.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild)
       yield* Effect.yieldNow
 
       // Act
@@ -110,11 +93,7 @@ describe('MonitorStreams', () => {
       const repository = yield* MonitorRepository.MonitorRepository
       const events = yield* WatchdogEvents.WatchdogEvents
 
-      const collected = yield* streams.observations.pipe(
-        Stream.take(2),
-        Stream.runCollect,
-        Effect.forkChild,
-      )
+      const collected = yield* streams.observations.pipe(Stream.take(2), Stream.runCollect, Effect.forkChild)
       yield* Effect.yieldNow
 
       const created = yield* repository.register(definition)
@@ -140,11 +119,7 @@ describe('MonitorStreams', () => {
       const repository = yield* MonitorRepository.MonitorRepository
       const [saved] = yield* repository.list
 
-      const collected = yield* streams.observations.pipe(
-        Stream.take(1),
-        Stream.runCollect,
-        Effect.forkChild,
-      )
+      const collected = yield* streams.observations.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild)
       yield* Effect.yieldNow
       yield* TestClock.adjust(Duration.minutes(1))
       yield* Effect.yieldNow
@@ -172,11 +147,7 @@ describe('MonitorStreams', () => {
       )
       yield* Effect.yieldNow
 
-      const probe = yield* streams.observations.pipe(
-        Stream.take(1),
-        Stream.runCollect,
-        Effect.forkChild,
-      )
+      const probe = yield* streams.observations.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild)
       yield* Effect.yieldNow
 
       // Act

@@ -74,15 +74,8 @@ const statusStyle = (health: Option.Option<MonitorHealth>): StatusStyle =>
 
 const statusBadge = (style: StatusStyle, h: HtmlBuilder<Message>): Html =>
   h.span(
-    [
-      h.Class(
-        `inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${style.pill}`,
-      ),
-    ],
-    [
-      h.span([h.Class(`h-1.5 w-1.5 rounded-full ${style.dot}`), h.AriaHidden(true)], []),
-      style.label,
-    ],
+    [h.Class(`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${style.pill}`)],
+    [h.span([h.Class(`h-1.5 w-1.5 rounded-full ${style.dot}`), h.AriaHidden(true)], []), style.label],
   )
 
 const statusSummary = (entry: MonitorWithHealth, h: HtmlBuilder<Message>): Html => {
@@ -99,10 +92,7 @@ const statusSummary = (entry: MonitorWithHealth, h: HtmlBuilder<Message>): Html 
 
   return h.p(
     [h.Class('mt-2 text-sm text-gray-600')],
-    [
-      h.span([], [outcome]),
-      h.span([h.Class('text-gray-500')], [` · checked ${formatTimestamp(value.time)}`]),
-    ],
+    [h.span([], [outcome]), h.span([h.Class('text-gray-500')], [` · checked ${formatTimestamp(value.time)}`])],
   )
 }
 
@@ -123,10 +113,7 @@ const degradedDetails = (entry: MonitorWithHealth, h: HtmlBuilder<Message>): Htm
     return h.details(
       [h.Class('mt-2 text-sm text-gray-600')],
       [
-        h.summary(
-          [h.Class('cursor-pointer select-none text-gray-500 hover:text-gray-700')],
-          ['Response details'],
-        ),
+        h.summary([h.Class('cursor-pointer select-none text-gray-500 hover:text-gray-700')], ['Response details']),
         h.dl(
           [h.Class('mt-2')],
           [
@@ -142,10 +129,7 @@ const degradedDetails = (entry: MonitorWithHealth, h: HtmlBuilder<Message>): Htm
   return h.details(
     [h.Class('mt-2 text-sm text-gray-600')],
     [
-      h.summary(
-        [h.Class('cursor-pointer select-none text-gray-500 hover:text-gray-700')],
-        ['Response details'],
-      ),
+      h.summary([h.Class('cursor-pointer select-none text-gray-500 hover:text-gray-700')], ['Response details']),
       h.dl(
         [h.Class('mt-2')],
         [
@@ -196,10 +180,7 @@ const monitorRow = (entry: MonitorWithHealth, h: HtmlBuilder<Message>): Html => 
               h.div(
                 [h.Class('flex items-center gap-3')],
                 [
-                  h.span(
-                    [h.Class('rounded bg-gray-100 px-2 py-0.5 font-mono text-xs')],
-                    [monitor.request.method],
-                  ),
+                  h.span([h.Class('rounded bg-gray-100 px-2 py-0.5 font-mono text-xs')], [monitor.request.method]),
                   h.span([h.Class('text-sm text-gray-500')], [monitorUrl(monitor)]),
                 ],
               ),
@@ -258,8 +239,7 @@ export const monitorsSection = (model: Model, h: HtmlBuilder<Message>): Html =>
           Button.view(
             {
               onClick: Message.ClickedRetryListMonitors(),
-              toView: (attributes) =>
-                h.button([...attributes.button, h.Class(PRIMARY_BUTTON_CLASS)], ['Retry']),
+              toView: (attributes) => h.button([...attributes.button, h.Class(PRIMARY_BUTTON_CLASS)], ['Retry']),
             },
             h,
           ),
@@ -267,8 +247,7 @@ export const monitorsSection = (model: Model, h: HtmlBuilder<Message>): Html =>
       ),
     onData: (monitors) =>
       Array.match(monitors, {
-        onEmpty: () =>
-          h.p([h.Class('text-sm text-gray-500')], ['No monitors yet. Add one to get started.']),
+        onEmpty: () => h.p([h.Class('text-sm text-gray-500')], ['No monitors yet. Add one to get started.']),
         onNonEmpty: (monitors) =>
           h.ul(
             [h.Class('space-y-3')],
@@ -295,11 +274,7 @@ export const toastView = (model: Model, h: HtmlBuilder<Message>): Html =>
       entryClassName: 'w-80',
       entryToView: (entry, handlers) =>
         h.div(
-          [
-            h.Class(
-              'flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-lg',
-            ),
-          ],
+          [h.Class('flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-lg')],
           [
             h.p([h.Class('flex-1 text-sm text-gray-800')], [entry.payload.message]),
             h.button([...handlers.dismiss, h.Class(CLOSE_BUTTON_CLASS)], ['Dismiss']),

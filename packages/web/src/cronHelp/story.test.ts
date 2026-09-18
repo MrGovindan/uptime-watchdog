@@ -59,10 +59,7 @@ test('a description dispatches a conversion and starts working', () => {
         expect(current.state.verb.length).toBeGreaterThan(0)
       }
     }),
-    Command.resolve(
-      ConvertCronDescription,
-      CronHelp.Message.CompletedConvertCronDescription({ cron: '0 9 * * 1-5' }),
-    ),
+    Command.resolve(ConvertCronDescription, CronHelp.Message.CompletedConvertCronDescription({ cron: '0 9 * * 1-5' })),
     model((current) => {
       expect(current.state._tag).toBe('Result')
     }),
@@ -87,10 +84,7 @@ test('an unavailable provider offers a retry', () => {
     model((current) => {
       expect(current.state._tag).toBe('Working')
     }),
-    Command.resolve(
-      ConvertCronDescription,
-      CronHelp.Message.CompletedConvertCronDescription({ cron: '0 9 * * 1-5' }),
-    ),
+    Command.resolve(ConvertCronDescription, CronHelp.Message.CompletedConvertCronDescription({ cron: '0 9 * * 1-5' })),
     model((current) => {
       expect(current.state._tag).toBe('Result')
     }),

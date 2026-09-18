@@ -14,8 +14,7 @@ export type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessag
 export type InitReturn = Update.Return<Model, Message>
 
 const readDialog = (model: Model) => Option.some(model.dialog)
-const writeDialog = (model: Model, nextDialog: Dialog.Model): Model =>
-  evo(model, { dialog: () => nextDialog })
+const writeDialog = (model: Model, nextDialog: Dialog.Model): Model => evo(model, { dialog: () => nextDialog })
 const toDialogMessage = (message: Dialog.Message): Message => Message.GotDialogMessage({ message })
 
 const foldDialogOutMessage = Dialog.OutMessage.match<Update.Step<Model, Message>>({
@@ -23,8 +22,7 @@ const foldDialogOutMessage = Dialog.OutMessage.match<Update.Step<Model, Message>
   Closed: () => (model) => ({ model: resetToEntering(model) }),
 })
 
-export const resetToEntering = (model: Model): Model =>
-  evo(model, { state: () => State.Entering({ description: '' }) })
+export const resetToEntering = (model: Model): Model => evo(model, { state: () => State.Entering({ description: '' }) })
 
 const foldDialog = Update.foldChild({
   update: Dialog.update,
@@ -100,9 +98,7 @@ export const update = (model: Model, message: Message) =>
     },
 
     CompletedConvertCronDescription: ({ cron }) =>
-      model.state._tag === 'Working'
-        ? { model: evo(model, { state: () => State.Result({ cron }) }) }
-        : { model },
+      model.state._tag === 'Working' ? { model: evo(model, { state: () => State.Result({ cron }) }) } : { model },
 
     FailedConvertCronDescription: ({ failure }) => {
       if (model.state._tag !== 'Working') {

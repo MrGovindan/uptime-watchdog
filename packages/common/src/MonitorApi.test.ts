@@ -25,9 +25,7 @@ describe('api errors', () => {
       mattermostUserId: 'mm-jesse',
     })
 
-    expect(error.message).toBe(
-      'Mattermost user mm-jesse is already a notification target for this monitor',
-    )
+    expect(error.message).toBe('Mattermost user mm-jesse is already a notification target for this monitor')
   })
 
   it('render a human-readable message for a missing mattermost user', () => {

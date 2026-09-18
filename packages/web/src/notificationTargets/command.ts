@@ -7,8 +7,7 @@ import { Message } from './message'
 
 const SEARCH_DEBOUNCE_MILLIS = 250
 
-const describeError = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
+const describeError = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
 export const LoadNotificationTargets = Command.define('LoadNotificationTargets', {
   args: { monitorId: MonitorId },
@@ -19,9 +18,7 @@ export const LoadNotificationTargets = Command.define('LoadNotificationTargets',
       const targets = yield* client.monitor.listNotificationTargets({ params: { monitorId } })
       return Message.CompletedLoadNotificationTargets({ targets })
     }).pipe(
-      Effect.catch((error) =>
-        Effect.succeed(Message.FailedLoadNotificationTargets({ error: describeError(error) })),
-      ),
+      Effect.catch((error) => Effect.succeed(Message.FailedLoadNotificationTargets({ error: describeError(error) }))),
     ),
 })
 
@@ -36,9 +33,7 @@ export const SearchMattermostUsers = Command.define('SearchMattermostUsers', {
       return Message.CompletedSearchMattermostUsers({ term, version, users })
     }).pipe(
       Effect.catch((error) =>
-        Effect.succeed(
-          Message.FailedSearchMattermostUsers({ term, version, error: describeError(error) }),
-        ),
+        Effect.succeed(Message.FailedSearchMattermostUsers({ term, version, error: describeError(error) })),
       ),
     ),
 })
@@ -55,9 +50,7 @@ export const AddNotificationTarget = Command.define('AddNotificationTarget', {
       })
       return Message.CompletedAddNotificationTarget({ target })
     }).pipe(
-      Effect.catch((error) =>
-        Effect.succeed(Message.FailedAddNotificationTarget({ error: describeError(error) })),
-      ),
+      Effect.catch((error) => Effect.succeed(Message.FailedAddNotificationTarget({ error: describeError(error) }))),
     ),
 })
 
@@ -70,9 +63,7 @@ export const RemoveNotificationTarget = Command.define('RemoveNotificationTarget
       yield* client.monitor.removeNotificationTarget({ params: { monitorId, mattermostUserId } })
       return Message.CompletedRemoveNotificationTarget({ mattermostUserId })
     }).pipe(
-      Effect.catch((error) =>
-        Effect.succeed(Message.FailedRemoveNotificationTarget({ error: describeError(error) })),
-      ),
+      Effect.catch((error) => Effect.succeed(Message.FailedRemoveNotificationTarget({ error: describeError(error) }))),
     ),
 })
 
@@ -90,8 +81,6 @@ export const SendTestNotification = Command.define('SendTestNotification', {
       })
       return Message.CompletedSendTestNotification()
     }).pipe(
-      Effect.catch((error) =>
-        Effect.succeed(Message.FailedSendTestNotification({ error: describeError(error) })),
-      ),
+      Effect.catch((error) => Effect.succeed(Message.FailedSendTestNotification({ error: describeError(error) }))),
     ),
 })

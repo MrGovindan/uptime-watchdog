@@ -13,8 +13,7 @@ const INPUT_CLASS =
 const ERROR_CLASS = 'text-sm text-red-600'
 const HELPER_CLASS = 'text-sm text-gray-500'
 const SECTION_TITLE_CLASS = 'text-sm font-semibold text-gray-800'
-const BUTTON_CLASS =
-  'rounded-md px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500'
+const BUTTON_CLASS = 'rounded-md px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500'
 const SECONDARY_BUTTON_CLASS = `${BUTTON_CLASS} border border-gray-300 bg-white text-gray-700 hover:bg-gray-50`
 const CLOSE_BUTTON_CLASS = 'rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600'
 const DIALOG_CLASS = 'fixed inset-0 z-50 grid place-items-center p-4'
@@ -40,8 +39,7 @@ const targetRow = (target: NotificationTarget, h: HtmlBuilder<Message>): Html =>
           Button.view(
             {
               onClick: Message.ClickedSendTest({ mattermostUserId: target.mattermostUserId }),
-              toView: (attributes) =>
-                h.button([...attributes.button, h.Class(SECONDARY_BUTTON_CLASS)], ['Send test']),
+              toView: (attributes) => h.button([...attributes.button, h.Class(SECONDARY_BUTTON_CLASS)], ['Send test']),
             },
             h,
           ),
@@ -50,8 +48,7 @@ const targetRow = (target: NotificationTarget, h: HtmlBuilder<Message>): Html =>
               onClick: Message.ClickedRemoveNotificationTarget({
                 mattermostUserId: target.mattermostUserId,
               }),
-              toView: (attributes) =>
-                h.button([...attributes.button, h.Class(SECONDARY_BUTTON_CLASS)], ['Remove']),
+              toView: (attributes) => h.button([...attributes.button, h.Class(SECONDARY_BUTTON_CLASS)], ['Remove']),
             },
             h,
           ),
@@ -71,15 +68,11 @@ const targetsSection = (model: Model, h: HtmlBuilder<Message>): Html =>
           AsyncData.matchDataSplitEmpty(model.targets, {
             onIdle: () => h.empty,
             onLoading: () => h.p([h.Class(HELPER_CLASS)], ['Loading notification targets...']),
-            onFailure: (error) =>
-              h.p([h.Class(ERROR_CLASS)], [`Could not load notification targets: ${error}`]),
+            onFailure: (error) => h.p([h.Class(ERROR_CLASS)], [`Could not load notification targets: ${error}`]),
             onData: (targets) =>
               Array.match(targets, {
                 onEmpty: () =>
-                  h.p(
-                    [h.Class(HELPER_CLASS)],
-                    ['No one is notified yet. Search for a Mattermost user below.'],
-                  ),
+                  h.p([h.Class(HELPER_CLASS)], ['No one is notified yet. Search for a Mattermost user below.']),
                 onNonEmpty: (targets) =>
                   h.ul(
                     [h.Class('space-y-2')],
@@ -107,8 +100,7 @@ const userResult = (user: MattermostUser, h: HtmlBuilder<Message>): Html =>
       Button.view(
         {
           onClick: Message.ClickedAddNotificationTarget({ mattermostUser: user }),
-          toView: (attributes) =>
-            h.button([...attributes.button, h.Class(SECONDARY_BUTTON_CLASS)], ['Add']),
+          toView: (attributes) => h.button([...attributes.button, h.Class(SECONDARY_BUTTON_CLASS)], ['Add']),
         },
         h,
       ),
@@ -190,10 +182,7 @@ export const view = Submodel.defineView<Model, Message>((model, h): Html =>
                   [h.Class('flex items-start justify-between gap-4')],
                   [
                     h.h2([...title, h.Class('text-lg font-semibold')], ['Notification targets']),
-                    h.button(
-                      [...closeButton, h.Class(CLOSE_BUTTON_CLASS), h.AriaLabel('Close')],
-                      ['×'],
-                    ),
+                    h.button([...closeButton, h.Class(CLOSE_BUTTON_CLASS), h.AriaLabel('Close')], ['×']),
                   ],
                 ),
                 h.p(

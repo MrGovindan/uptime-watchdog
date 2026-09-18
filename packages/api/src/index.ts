@@ -46,10 +46,7 @@ const application = Layer.unwrap(
     const monitorRespository = MonitorRepository.layer.pipe(Layer.provide(database))
     const targetRepository = NotificationTargetRepository.layer.pipe(Layer.provide(database))
     const mattermost = Mattermost.layer(mattermostConfig)
-    const scheduleModel = CronConversion.layer.pipe(
-      Layer.provide(lm),
-      Layer.provide(BunHttpClient.layer),
-    )
+    const scheduleModel = CronConversion.layer.pipe(Layer.provide(lm), Layer.provide(BunHttpClient.layer))
 
     const streams = MonitorStreams.layer.pipe(
       Layer.provide(events),
@@ -65,18 +62,14 @@ const application = Layer.unwrap(
     const status = MonitorHealth.layer.pipe(Layer.provide(streams), Layer.provide(events))
 
     const api = MonitorApi.layer.pipe(
-      Layer.provide(
-        Layer.mergeAll(events, monitorRespository, targetRepository, mattermost, scheduleModel),
-      ),
+      Layer.provide(Layer.mergeAll(events, monitorRespository, targetRepository, mattermost, scheduleModel)),
       Layer.provide(status),
     )
     const webApp = HttpStaticServer.layer({ root: staticRoot, spa: true })
     // The RPC socket streams the same bus the API publishes to, so provide the
     // one shared `events` layer instead of building a second instance.
     const rpc = WatchdogRpc.layer.pipe(Layer.provide(events))
-    const served = HttpRouter.serve(Layer.mergeAll(webApp, api, rpc)).pipe(
-      Layer.provide(BunHttpServer.layer({ port })),
-    )
+    const served = HttpRouter.serve(Layer.mergeAll(webApp, api, rpc)).pipe(Layer.provide(BunHttpServer.layer({ port })))
 
     // Building the streams and worker layers subscribes them to the event bus,
     // so sequence them before the server accepts requests.

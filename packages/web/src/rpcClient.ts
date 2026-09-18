@@ -16,7 +16,5 @@ const protocol = RpcClient.layerProtocolSocket().pipe(
 export class WatchdogRpcClient extends Context.Service<WatchdogRpcClient>()('WatchdogRpcClient', {
   make: RpcClient.make(WatchdogRpcs),
 }) {
-  static layer = Layer.effect(WatchdogRpcClient, WatchdogRpcClient.make).pipe(
-    Layer.provide(protocol),
-  )
+  static layer = Layer.effect(WatchdogRpcClient, WatchdogRpcClient.make).pipe(Layer.provide(protocol))
 }

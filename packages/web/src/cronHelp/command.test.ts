@@ -30,9 +30,7 @@ const run = (client: HttpClient.HttpClient) =>
 describe('ConvertCronDescription', () => {
   test('reports the converted cron expression', async () => {
     const message = await run(
-      HttpClient.make((request) =>
-        Effect.sync(() => respondWith(request, 200, { cron: '0 9 * * 1-5' })),
-      ),
+      HttpClient.make((request) => Effect.sync(() => respondWith(request, 200, { cron: '0 9 * * 1-5' }))),
     )
 
     expect(message._tag).toBe('CompletedConvertCronDescription')
@@ -44,9 +42,7 @@ describe('ConvertCronDescription', () => {
   test('reports an unavailable provider as retryable', async () => {
     const message = await run(
       HttpClient.make((request) =>
-        Effect.sync(() =>
-          respondWith(request, 502, { _tag: 'ProviderUnavailable', message: 'provider is down' }),
-        ),
+        Effect.sync(() => respondWith(request, 502, { _tag: 'ProviderUnavailable', message: 'provider is down' })),
       ),
     )
 
@@ -58,9 +54,7 @@ describe('ConvertCronDescription', () => {
 
   test('reports exhausted tokens', async () => {
     const message = await run(
-      HttpClient.make((request) =>
-        Effect.sync(() => respondWith(request, 429, { _tag: 'TokensExhausted' })),
-      ),
+      HttpClient.make((request) => Effect.sync(() => respondWith(request, 429, { _tag: 'TokensExhausted' }))),
     )
 
     expect(message._tag).toBe('FailedConvertCronDescription')
@@ -90,9 +84,7 @@ describe('ConvertCronDescription', () => {
 
   test('reports unexpected errors', async () => {
     const message = await run(
-      HttpClient.make((request) =>
-        Effect.sync(() => respondWith(request, 500, { message: 'boom' })),
-      ),
+      HttpClient.make((request) => Effect.sync(() => respondWith(request, 500, { message: 'boom' }))),
     )
 
     expect(message._tag).toBe('FailedConvertCronDescription')

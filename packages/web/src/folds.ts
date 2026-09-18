@@ -18,10 +18,8 @@ type ToastMessage = typeof Toast.Message.Type
 // ADD MONITOR DIALOG
 
 const readDialog = (model: Model) => Option.some(model.dialog)
-const writeDialog = (model: Model, nextDialog: Dialog.Model): Model =>
-  evo(model, { dialog: () => nextDialog })
-const toAddMonitorDialogMessage = (message: Dialog.Message): Message =>
-  Message.GotAddMonitorDialogMessage({ message })
+const writeDialog = (model: Model, nextDialog: Dialog.Model): Model => evo(model, { dialog: () => nextDialog })
+const toAddMonitorDialogMessage = (message: Dialog.Message): Message => Message.GotAddMonitorDialogMessage({ message })
 
 export const resetForm = (model: Model): Model =>
   evo(model, { form: () => makeInitialForm(), editingMonitorId: () => Option.none() })
@@ -97,8 +95,7 @@ export const foldCloseDeleteMonitorDialog = Update.foldChildStep({
 const readCronHelp = (model: Model) => Option.some(model.cronHelp)
 const writeCronHelp = (model: Model, nextCronHelp: CronHelp.Model): Model =>
   evo(model, { cronHelp: () => nextCronHelp })
-const toCronHelpMessage = (message: CronHelp.Message): Message =>
-  Message.GotCronHelpMessage({ message })
+const toCronHelpMessage = (message: CronHelp.Message): Message => Message.GotCronHelpMessage({ message })
 
 const readCronHelpDialog = (model: Model) => Option.some(model.cronHelp.dialog)
 const writeCronHelpDialog = (model: Model, nextDialog: Dialog.Model): Model =>
@@ -163,8 +160,7 @@ export const foldCronHelp = Update.foldChild({
 // TOAST
 
 const readToast = (model: Model) => Option.some(model.toast)
-const writeToast = (model: Model, nextToast: ToastModel): Model =>
-  evo(model, { toast: () => nextToast })
+const writeToast = (model: Model, nextToast: ToastModel): Model => evo(model, { toast: () => nextToast })
 const toToastMessage = (message: ToastMessage): Message => Message.GotToastMessage({ message })
 
 const foldToastOutMessage = Toast.OutMessage.match<Update.Step<Model, Message>>({
@@ -190,16 +186,12 @@ export const foldShowToast = Update.foldChild({
 // NOTIFICATION TARGETS
 
 const readNotificationTargets = (model: Model) => Option.some(model.notificationTargets)
-const writeNotificationTargets = (
-  model: Model,
-  nextNotificationTargets: NotificationTargets.Model,
-): Model => evo(model, { notificationTargets: () => nextNotificationTargets })
+const writeNotificationTargets = (model: Model, nextNotificationTargets: NotificationTargets.Model): Model =>
+  evo(model, { notificationTargets: () => nextNotificationTargets })
 const toNotificationTargetsMessage = (message: NotificationTargets.Message): Message =>
   Message.GotNotificationTargetsMessage({ message })
 
-const foldNotificationTargetsOutMessage = NotificationTargets.OutMessage.match<
-  Update.Step<Model, Message>
->({
+const foldNotificationTargetsOutMessage = NotificationTargets.OutMessage.match<Update.Step<Model, Message>>({
   SentTestNotification: () => (stepModel) =>
     foldShowToast(stepModel, {
       variant: 'Success',
@@ -220,10 +212,8 @@ export const foldNotificationTargets = Update.foldChild({
 })
 
 export const foldOpenNotificationTargets = Update.foldChild({
-  update: (
-    notificationTargetsModel: NotificationTargets.Model,
-    input: NotificationTargets.OpenInput,
-  ) => NotificationTargets.open(notificationTargetsModel, input),
+  update: (notificationTargetsModel: NotificationTargets.Model, input: NotificationTargets.OpenInput) =>
+    NotificationTargets.open(notificationTargetsModel, input),
   read: readNotificationTargets,
   write: writeNotificationTargets,
   toParentMessage: toNotificationTargetsMessage,

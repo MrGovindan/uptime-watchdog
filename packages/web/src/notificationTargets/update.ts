@@ -45,8 +45,7 @@ const resetSession = (model: Model): Model =>
   })
 
 const readDialog = (model: Model) => Option.some(model.dialog)
-const writeDialog = (model: Model, nextDialog: Dialog.Model): Model =>
-  evo(model, { dialog: () => nextDialog })
+const writeDialog = (model: Model, nextDialog: Dialog.Model): Model => evo(model, { dialog: () => nextDialog })
 const toDialogMessage = (message: Dialog.Message): Message => Message.GotDialogMessage({ message })
 
 const foldDialogOutMessage = Dialog.OutMessage.match<Update.Step<Model, Message>>({
@@ -71,9 +70,7 @@ const foldDialogOpen = Update.foldChildStep({
 })
 
 const appendTarget = (targets: Model['targets'], target: NotificationTarget): Model['targets'] => {
-  const existing = AsyncData.hasData(targets)
-    ? Option.getOrElse(AsyncData.getData(targets), () => [])
-    : []
+  const existing = AsyncData.hasData(targets) ? Option.getOrElse(AsyncData.getData(targets), () => []) : []
 
   return TargetsAsyncData.Success({ data: [...existing, target] })
 }

@@ -15,9 +15,7 @@ const SEARCH_LIMIT = 20
 type MattermostError = Readonly<{ _tag: string; message?: string | undefined }>
 
 export interface Interface {
-  readonly searchUsers: (
-    term: string,
-  ) => Effect.Effect<ReadonlyArray<MattermostUser>, MattermostUnavailable>
+  readonly searchUsers: (term: string) => Effect.Effect<ReadonlyArray<MattermostUser>, MattermostUnavailable>
   readonly getUser: (
     userId: MattermostUserId,
   ) => Effect.Effect<MattermostUser, MattermostUserNotFound | MattermostUnavailable>
@@ -42,8 +40,7 @@ const describe = (error: unknown): string => {
   return String(error)
 }
 
-const unavailable = (error: unknown): MattermostUnavailable =>
-  new MattermostUnavailable({ message: describe(error) })
+const unavailable = (error: unknown): MattermostUnavailable => new MattermostUnavailable({ message: describe(error) })
 
 const userNotFound = (userId: MattermostUserId): MattermostUserNotFound =>
   new MattermostUserNotFound({ mattermostUserId: userId })
@@ -66,8 +63,7 @@ const displayNameOf = (user: MattermostApi.User): string => {
   return user.nickname === undefined || user.nickname.trim() === '' ? user.username : user.nickname
 }
 
-const isSelectable = (user: MattermostApi.User): boolean =>
-  user.is_bot !== true && (user.delete_at ?? 0) === 0
+const isSelectable = (user: MattermostApi.User): boolean => user.is_bot !== true && (user.delete_at ?? 0) === 0
 
 const toProjection = (user: MattermostApi.User): MattermostUser => ({
   id: user.id,
@@ -97,11 +93,7 @@ export const make = (options: Readonly<{ baseUrl: URL; apiToken: Redacted.Redact
     ): Effect.Effect<MattermostApi.User, MattermostUserNotFound | MattermostUnavailable> =>
       client.users
         .getUser({ params: { userId } })
-        .pipe(
-          Effect.mapError((error) =>
-            isMissingUser(error) ? userNotFound(userId) : unavailable(error),
-          ),
-        )
+        .pipe(Effect.mapError((error) => (isMissingUser(error) ? userNotFound(userId) : unavailable(error))))
 
     const getUser = Effect.fn('Mattermost.getUser')(function* (userId: MattermostUserId) {
       const user = yield* fetchUser(userId)
@@ -135,16 +127,10 @@ export const make = (options: Readonly<{ baseUrl: URL; apiToken: Redacted.Redact
       Effect.tap(() => Effect.logInfo('Validated Mattermost API token')),
       Effect.catch((error) => {
         if (isRejectedToken(error)) {
-          return Effect.die(
-            new Error(
-              'MATTERMOST_API_TOKEN was rejected by Mattermost. Check the configured token.',
-            ),
-          )
+          return Effect.die(new Error('MATTERMOST_API_TOKEN was rejected by Mattermost. Check the configured token.'))
         }
 
-        return Effect.logWarning(
-          `Mattermost was unreachable at startup; notifications may fail: ${describe(error)}`,
-        )
+        return Effect.logWarning(`Mattermost was unreachable at startup; notifications may fail: ${describe(error)}`)
       }),
     )
 

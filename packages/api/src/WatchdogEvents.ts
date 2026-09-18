@@ -6,9 +6,7 @@ export interface Interface {
   readonly stream: Stream.Stream<WatchdogEvent>
 }
 
-export class WatchdogEvents extends Context.Service<WatchdogEvents, Interface>()(
-  'WatchdogEvents',
-) {}
+export class WatchdogEvents extends Context.Service<WatchdogEvents, Interface>()('WatchdogEvents') {}
 
 const make = Effect.gen(function* () {
   const pubsub = yield* PubSub.unbounded<WatchdogEvent>()

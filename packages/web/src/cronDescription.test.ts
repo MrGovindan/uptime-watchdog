@@ -3,8 +3,7 @@ import { describe, expect, test } from 'vitest'
 
 import { describeCron } from './cronDescription'
 
-const describeExpression = (expression: string): string =>
-  describeCron(Cron.parseUnsafe(expression))
+const describeExpression = (expression: string): string => describeCron(Cron.parseUnsafe(expression))
 
 describe('describeCron', () => {
   test.each([

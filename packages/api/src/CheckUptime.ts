@@ -12,12 +12,9 @@ const buildRequest = (request: UptimeRequest): HttpClientRequest.HttpClientReque
     Option.map((path) => (path.startsWith('/') ? path.slice(1) : path)),
     Option.getOrElse(() => ''),
   )
-  return HttpClientRequest.make(request.method)(
-    `${request.protocol}://${request.hostname}:${request.port}/${path}`,
-    {
-      headers: request.headers,
-    },
-  )
+  return HttpClientRequest.make(request.method)(`${request.protocol}://${request.hostname}:${request.port}/${path}`, {
+    headers: request.headers,
+  })
 }
 
 export const layer = Layer.effect(

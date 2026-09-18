@@ -5,14 +5,7 @@ import type { ChildAttribute, Html, HtmlBuilder } from 'foldkit/html'
 import { Message } from '../message'
 import type { Model } from '../model'
 import { addMonitorForm } from './addMonitorForm'
-import {
-  BACKDROP_CLASS,
-  CLOSE_BUTTON_CLASS,
-  DIALOG_CLASS,
-  PANEL_CLASS,
-  dangerButton,
-  secondaryButton,
-} from './field'
+import { BACKDROP_CLASS, CLOSE_BUTTON_CLASS, DIALOG_CLASS, PANEL_CLASS, dangerButton, secondaryButton } from './field'
 
 // NOTE: Foldkit 0.160.0 has no `isDismissible` flag on Dialog, so Escape and
 // backdrop dismissal are disabled by filtering those two attribute handlers out
@@ -20,8 +13,7 @@ import {
 const isEscapeToClose = (attribute: ChildAttribute): boolean =>
   Predicate.isTagged(attribute.attribute, 'OnCancelPreventDefault')
 
-const isBackdropToClose = (attribute: ChildAttribute): boolean =>
-  Predicate.isTagged(attribute.attribute, 'OnClick')
+const isBackdropToClose = (attribute: ChildAttribute): boolean => Predicate.isTagged(attribute.attribute, 'OnClick')
 
 export const addMonitorDialog = (model: Model, h: HtmlBuilder<Message>): Html => {
   const isEditing = Option.isSome(model.editingMonitorId)
@@ -42,24 +34,15 @@ export const addMonitorDialog = (model: Model, h: HtmlBuilder<Message>): Html =>
         return h.dialog(
           [...dialogAttributes, h.Class(DIALOG_CLASS)],
           [
-            h.div([
-              ...Array.filter(backdrop, (attribute) => !isBackdropToClose(attribute)),
-              h.Class(BACKDROP_CLASS),
-            ]),
+            h.div([...Array.filter(backdrop, (attribute) => !isBackdropToClose(attribute)), h.Class(BACKDROP_CLASS)]),
             h.div(
               [...panel, h.Class(PANEL_CLASS)],
               [
                 h.div(
                   [h.Class('flex items-start justify-between gap-4')],
                   [
-                    h.h2(
-                      [...title, h.Class('text-lg font-semibold')],
-                      [isEditing ? 'Edit monitor' : 'Add monitor'],
-                    ),
-                    h.button(
-                      [...closeButton, h.Class(CLOSE_BUTTON_CLASS), h.AriaLabel('Close')],
-                      ['×'],
-                    ),
+                    h.h2([...title, h.Class('text-lg font-semibold')], [isEditing ? 'Edit monitor' : 'Add monitor']),
+                    h.button([...closeButton, h.Class(CLOSE_BUTTON_CLASS), h.AriaLabel('Close')], ['×']),
                   ],
                 ),
                 h.p(
@@ -105,10 +88,7 @@ export const deleteMonitorDialog = (model: Model, h: HtmlBuilder<Message>): Html
                   [h.Class('flex items-start justify-between gap-4')],
                   [
                     h.h2([...title, h.Class('text-lg font-semibold')], ['Delete monitor']),
-                    h.button(
-                      [...closeButton, h.Class(CLOSE_BUTTON_CLASS), h.AriaLabel('Close')],
-                      ['×'],
-                    ),
+                    h.button([...closeButton, h.Class(CLOSE_BUTTON_CLASS), h.AriaLabel('Close')], ['×']),
                   ],
                 ),
                 h.p(

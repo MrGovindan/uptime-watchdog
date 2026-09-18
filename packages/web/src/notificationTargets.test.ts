@@ -1,9 +1,4 @@
-import {
-  type MattermostUser,
-  MonitorId,
-  MonitorName,
-  NotificationTarget,
-} from '@uptime-watchdog/common'
+import { type MattermostUser, MonitorId, MonitorName, NotificationTarget } from '@uptime-watchdog/common'
 import { Option, Schema } from 'effect'
 import { Command, expectOutMessage, given, message, model, story } from 'foldkit/story'
 import { expect, test } from 'vitest'
@@ -138,10 +133,7 @@ test('adding a user dispatches an add and appends the created target', () => {
     given(openedModel),
     message(NotificationTargets.Message.ClickedAddNotificationTarget({ mattermostUser })),
     Command.expectHas(AddNotificationTarget),
-    Command.resolve(
-      AddNotificationTarget,
-      NotificationTargets.Message.CompletedAddNotificationTarget({ target }),
-    ),
+    Command.resolve(AddNotificationTarget, NotificationTargets.Message.CompletedAddNotificationTarget({ target })),
     model((current) => {
       expect(current.targets._tag).toBe('Success')
       if (current.targets._tag === 'Success') {

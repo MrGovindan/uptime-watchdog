@@ -9,11 +9,7 @@ describe('StreamRegistry', () => {
     Effect.gen(function* () {
       // Arrange
       const registry = yield* Registry
-      const collected = yield* registry.stream.pipe(
-        Stream.take(3),
-        Stream.runCollect,
-        Effect.forkChild,
-      )
+      const collected = yield* registry.stream.pipe(Stream.take(3), Stream.runCollect, Effect.forkChild)
       yield* Effect.yieldNow
 
       // Act
@@ -39,11 +35,7 @@ describe('StreamRegistry', () => {
       const first = yield* Deferred.make<void>()
       const second = yield* Deferred.make<void>()
 
-      const collected = yield* registry.stream.pipe(
-        Stream.take(1),
-        Stream.runCollect,
-        Effect.forkChild,
-      )
+      const collected = yield* registry.stream.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild)
       yield* Effect.yieldNow
 
       // Act
@@ -65,11 +57,7 @@ describe('StreamRegistry', () => {
       const removed = yield* Deferred.make<void>()
       const kept = yield* Deferred.make<void>()
 
-      const collected = yield* registry.stream.pipe(
-        Stream.take(1),
-        Stream.runCollect,
-        Effect.forkChild,
-      )
+      const collected = yield* registry.stream.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild)
       yield* Effect.yieldNow
 
       // Act

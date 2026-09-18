@@ -35,8 +35,7 @@ const fieldError = (
     onNotValidated: () => h.empty,
     onValidating: () => h.empty,
     onValid: () => h.empty,
-    onInvalid: ({ errors }) =>
-      h.span([...descriptionAttributes, h.Class(ERROR_CLASS)], [Array.headNonEmpty(errors)]),
+    onInvalid: ({ errors }) => h.span([...descriptionAttributes, h.Class(ERROR_CLASS)], [Array.headNonEmpty(errors)]),
   })
 
 export const fieldInput = (
@@ -80,12 +79,7 @@ export const fieldInput = (
                   [
                     ...(counter === undefined
                       ? []
-                      : [
-                          h.span(
-                            [h.Class(counter.isInvalid ? ERROR_CLASS : HELPER_CLASS)],
-                            [counter.text],
-                          ),
-                        ]),
+                      : [h.span([h.Class(counter.isInvalid ? ERROR_CLASS : HELPER_CLASS)], [counter.text])]),
                     ...(labelExtra === undefined ? [] : [labelExtra]),
                   ],
                 ),
@@ -161,8 +155,7 @@ export const secondaryButton = (onClick: Message, label: string, h: HtmlBuilder<
   Button.view(
     {
       onClick,
-      toView: (attributes) =>
-        h.button([...attributes.button, h.Class(SECONDARY_BUTTON_CLASS)], [label]),
+      toView: (attributes) => h.button([...attributes.button, h.Class(SECONDARY_BUTTON_CLASS)], [label]),
     },
     h,
   )
@@ -175,8 +168,7 @@ export const primaryButton = (
     {
       ...(inputs.onClick === undefined ? {} : { onClick: inputs.onClick }),
       ...(inputs.type === undefined ? {} : { type: inputs.type }),
-      toView: (attributes) =>
-        h.button([...attributes.button, h.Class(PRIMARY_BUTTON_CLASS)], [inputs.label]),
+      toView: (attributes) => h.button([...attributes.button, h.Class(PRIMARY_BUTTON_CLASS)], [inputs.label]),
     },
     h,
   )
@@ -185,8 +177,7 @@ export const dangerButton = (onClick: Message, label: string, h: HtmlBuilder<Mes
   Button.view(
     {
       onClick,
-      toView: (attributes) =>
-        h.button([...attributes.button, h.Class(DANGER_BUTTON_CLASS)], [label]),
+      toView: (attributes) => h.button([...attributes.button, h.Class(DANGER_BUTTON_CLASS)], [label]),
     },
     h,
   )

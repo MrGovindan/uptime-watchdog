@@ -24,9 +24,7 @@ export const CronExpression = Schema.String.pipe(
   Schema.decodeTo(CronFromSelf, {
     decode: SchemaGetter.transformEffect((expression: string) =>
       Effect.fromResult(
-        Cron.parse(expression).pipe(
-          Result.mapError((e) => new SchemaIssue.InvalidValue({ message: e.message })),
-        ),
+        Cron.parse(expression).pipe(Result.mapError((e) => new SchemaIssue.InvalidValue({ message: e.message }))),
       ),
     ),
 
@@ -36,9 +34,7 @@ export const CronExpression = Schema.String.pipe(
 
 export const CronDescriptionMax = 256
 
-export const CronDescription = NonEmptyTrimmedString.pipe(
-  Schema.check(Schema.isMaxLength(CronDescriptionMax)),
-)
+export const CronDescription = NonEmptyTrimmedString.pipe(Schema.check(Schema.isMaxLength(CronDescriptionMax)))
 export type CronDescription = typeof CronDescription.Type
 
 export const Headers = Schema.Record(NonEmptyTrimmedString, NonEmptyTrimmedString)

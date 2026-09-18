@@ -87,11 +87,7 @@ describe('view', () => {
   })
 
   test('shows a pending indicator before the first check', () => {
-    scene(
-      { update, view },
-      given(modelWithMonitors),
-      expect(text('Awaiting first check')).toExist(),
-    )
+    scene({ update, view }, given(modelWithMonitors), expect(text('Awaiting first check')).toExist())
   })
 
   test('shows a degraded indicator with the reason and response details', () => {
@@ -105,12 +101,7 @@ describe('view', () => {
   })
 
   test('offers edit and delete actions for each monitor', () => {
-    scene(
-      { update, view },
-      given(modelWithMonitors),
-      expect(text('Edit')).toExist(),
-      expect(text('Delete')).toExist(),
-    )
+    scene({ update, view }, given(modelWithMonitors), expect(text('Edit')).toExist(), expect(text('Delete')).toExist())
   })
 
   test('titles the dialog and submit button for editing', () => {

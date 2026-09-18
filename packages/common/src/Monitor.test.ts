@@ -1,14 +1,7 @@
 import { describe, expect, it } from '@effect/vitest'
 import { Cron, DateTime, Effect, Option, Schema } from 'effect'
 
-import {
-  EXPECTED_STATUS_MAX,
-  EXPECTED_STATUS_MIN,
-  Monitor,
-  MonitorDefinition,
-  MonitorId,
-  MonitorName,
-} from './Monitor'
+import { EXPECTED_STATUS_MAX, EXPECTED_STATUS_MIN, Monitor, MonitorDefinition, MonitorId, MonitorName } from './Monitor'
 
 const uuid = '2f1c9b3e-4a5d-4f6a-8b7c-1d2e3f4a5b6c'
 
@@ -59,12 +52,12 @@ describe('MonitorId', () => {
 describe('ExpectedStatus', () => {
   it.effect('accepts a status code within the HTTP range', () =>
     Effect.gen(function* () {
-      expect(
-        yield* decodeDefinition({ ...definitionJson, expectedStatus: EXPECTED_STATUS_MIN }),
-      ).toMatchObject({ expectedStatus: EXPECTED_STATUS_MIN })
-      expect(
-        yield* decodeDefinition({ ...definitionJson, expectedStatus: EXPECTED_STATUS_MAX }),
-      ).toMatchObject({ expectedStatus: EXPECTED_STATUS_MAX })
+      expect(yield* decodeDefinition({ ...definitionJson, expectedStatus: EXPECTED_STATUS_MIN })).toMatchObject({
+        expectedStatus: EXPECTED_STATUS_MIN,
+      })
+      expect(yield* decodeDefinition({ ...definitionJson, expectedStatus: EXPECTED_STATUS_MAX })).toMatchObject({
+        expectedStatus: EXPECTED_STATUS_MAX,
+      })
     }),
   )
 

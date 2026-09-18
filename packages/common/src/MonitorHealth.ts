@@ -10,10 +10,7 @@ export const ObservationOutcome = Schema.TaggedUnion({
 })
 export type ObservationOutcome = typeof ObservationOutcome.Type
 
-export const DegradedReason = Schema.Union([
-  ObservationOutcome.cases.Unexpected,
-  ObservationOutcome.cases.Error,
-])
+export const DegradedReason = Schema.Union([ObservationOutcome.cases.Unexpected, ObservationOutcome.cases.Error])
 export type DegradedReason = typeof DegradedReason.Type
 
 export const MonitorHealth = Schema.TaggedUnion({
@@ -28,10 +25,7 @@ export const MonitorWithHealth = Schema.Struct({
 })
 export type MonitorWithHealth = typeof MonitorWithHealth.Type
 
-export const toMonitorHealth = (
-  observation: UptimeObservation,
-  expectedStatus: ExpectedStatus,
-): MonitorHealth =>
+export const toMonitorHealth = (observation: UptimeObservation, expectedStatus: ExpectedStatus): MonitorHealth =>
   Result.match(observation.response, {
     onSuccess: (response) =>
       response.status === expectedStatus

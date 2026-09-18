@@ -9,15 +9,7 @@ import {
   Protocol,
 } from '@uptime-watchdog/common'
 import { Array, Cron, Option, Result, Schema } from 'effect'
-import {
-  Field,
-  Invalid,
-  NotValidated,
-  Rule,
-  allValid,
-  makeRules,
-  validate,
-} from 'foldkit/fieldValidation'
+import { Field, Invalid, NotValidated, Rule, allValid, makeRules, validate } from 'foldkit/fieldValidation'
 
 // FIELD VALIDATION
 

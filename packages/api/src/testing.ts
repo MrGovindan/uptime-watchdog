@@ -27,9 +27,7 @@ export const definitionJson = {
 
 export const dependencies = Layer.provideMerge(BunHttpServer.layerHttpServices)
 
-export const cronConversionStub = (
-  overrides: Partial<CronConversionInterface> = {},
-): Layer.Layer<CronConversion> => {
+export const cronConversionStub = (overrides: Partial<CronConversionInterface> = {}): Layer.Layer<CronConversion> => {
   const cron = Cron.parseUnsafe('*/5 * * * *', 'UTC')
   const base: CronConversionInterface = {
     convert: () => Effect.succeed({ cron }),
@@ -49,9 +47,7 @@ export const botUser: MattermostUser = {
   displayName: 'Watchdog',
 }
 
-export const mattermostStub = (
-  overrides: Partial<MattermostInterface> = {},
-): Layer.Layer<Mattermost> => {
+export const mattermostStub = (overrides: Partial<MattermostInterface> = {}): Layer.Layer<Mattermost> => {
   const users = new Map([[mattermostUser.id, mattermostUser]])
 
   const base: MattermostInterface = {
@@ -63,9 +59,7 @@ export const mattermostStub = (
         : Effect.succeed(user)
     },
     sendDirectMessage: (userId) =>
-      users.has(userId)
-        ? Effect.void
-        : Effect.fail(new MattermostUserNotFound({ mattermostUserId: userId })),
+      users.has(userId) ? Effect.void : Effect.fail(new MattermostUserNotFound({ mattermostUserId: userId })),
   }
 
   return Layer.succeed(Mattermost, { ...base, ...overrides })

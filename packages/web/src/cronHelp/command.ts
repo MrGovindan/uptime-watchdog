@@ -28,8 +28,6 @@ export const ConvertCronDescription = Command.define('ConvertCronDescription', {
       const conversion = yield* client.schedule.convertDescription({ payload: { description } })
       return Message.CompletedConvertCronDescription({ cron: Cron.format(conversion.cron) })
     }).pipe(
-      Effect.catch((error) =>
-        Effect.succeed(Message.FailedConvertCronDescription({ failure: toFailure(error) })),
-      ),
+      Effect.catch((error) => Effect.succeed(Message.FailedConvertCronDescription({ failure: toFailure(error) }))),
     ),
 })

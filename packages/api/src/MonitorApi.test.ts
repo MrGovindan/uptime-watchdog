@@ -31,11 +31,7 @@ import {
 const groupLayer = (overrides: Partial<MattermostInterface> = {}) => {
   const { events, monitors, targets, health } = shareDependencies()
 
-  return Layer.mergeAll(
-    MonitorApi.MonitorGroupLive,
-    MonitorApi.NotificationGroupLive,
-    ScheduleGroupLive,
-  ).pipe(
+  return Layer.mergeAll(MonitorApi.MonitorGroupLive, MonitorApi.NotificationGroupLive, ScheduleGroupLive).pipe(
     Layer.provide(events),
     Layer.provide(monitors),
     Layer.provide(targets),
@@ -67,11 +63,8 @@ const openClient = HttpApiTest.groups(Api, ['monitor', 'notification', 'schedule
 
 const definition = Effect.runSync(Schema.decodeUnknownEffect(MonitorDefinition)(definitionJson))
 
-const request = (
-  handler: (request: Request) => Promise<Response>,
-  path: string,
-  init?: RequestInit,
-) => Effect.promise(() => handler(new Request(`http://localhost${path}`, init)))
+const request = (handler: (request: Request) => Promise<Response>, path: string, init?: RequestInit) =>
+  Effect.promise(() => handler(new Request(`http://localhost${path}`, init)))
 
 const json = (body: unknown): RequestInit => ({
   method: 'POST',
@@ -176,9 +169,7 @@ describe('monitor update', () => {
     name: 'Renamed API',
     cronSchedule: '0 * * * *',
   }
-  const updatedDefinition = Effect.runSync(
-    Schema.decodeUnknownEffect(MonitorDefinition)(updatedJson),
-  )
+  const updatedDefinition = Effect.runSync(Schema.decodeUnknownEffect(MonitorDefinition)(updatedJson))
 
   it.effect('replaces the definition, preserving the id and createdAt', () =>
     Effect.gen(function* () {
@@ -297,11 +288,7 @@ describe('notification targets', () => {
         const body = { mattermostUserId: mattermostUser.id }
 
         yield* request(handler, `/monitor/${monitorId}/notification-target`, json(body))
-        const response = yield* request(
-          handler,
-          `/monitor/${monitorId}/notification-target`,
-          json(body),
-        )
+        const response = yield* request(handler, `/monitor/${monitorId}/notification-target`, json(body))
 
         expect(response.status).toBe(409)
       }),
@@ -409,11 +396,7 @@ describe('mattermost notification endpoints', () => {
   it.effect('rejects a blank search term with 400', () =>
     withWebHandler(applicationLayer(), (handler) =>
       Effect.gen(function* () {
-        const response = yield* request(
-          handler,
-          '/notification/mattermost/user/search',
-          json({ term: '   ' }),
-        )
+        const response = yield* request(handler, '/notification/mattermost/user/search', json({ term: '   ' }))
 
         expect(response.status).toBe(400)
       }),
@@ -421,9 +404,7 @@ describe('mattermost notification endpoints', () => {
   )
 
   it.effect('sends a test direct message', () => {
-    const sent = Effect.runSync(
-      Ref.make<ReadonlyArray<Readonly<{ userId: string; message: string }>>>([]),
-    )
+    const sent = Effect.runSync(Ref.make<ReadonlyArray<Readonly<{ userId: string; message: string }>>>([]))
 
     return Effect.gen(function* () {
       const { notification } = yield* openClient
@@ -443,8 +424,7 @@ describe('mattermost notification endpoints', () => {
       Effect.provide(
         groupLayer({
           getUser: () => Effect.succeed(botUser),
-          sendDirectMessage: (userId, message) =>
-            Ref.update(sent, (entries) => [...entries, { userId, message }]),
+          sendDirectMessage: (userId, message) => Ref.update(sent, (entries) => [...entries, { userId, message }]),
         }),
       ),
     )
@@ -488,9 +468,7 @@ describe('monitor health', () => {
   ): Effect.Effect<MonitorObservation> =>
     listMonitorsViaHttp(handler).pipe(
       Effect.flatMap((monitors) =>
-        Schema.decodeUnknownEffect(Monitor.json)(
-          monitors.find((entry) => entry.monitor.id === monitorId)!.monitor,
-        ),
+        Schema.decodeUnknownEffect(Monitor.json)(monitors.find((entry) => entry.monitor.id === monitorId)!.monitor),
       ),
       Effect.map((monitor) => ({
         monitor,
@@ -517,10 +495,7 @@ describe('monitor health', () => {
             health: { _tag: 'None' },
           })
 
-          yield* Queue.offer(
-            observations,
-            yield* observationFor(handler, MonitorId.make(monitorId), 200),
-          )
+          yield* Queue.offer(observations, yield* observationFor(handler, MonitorId.make(monitorId), 200))
 
           const [observed] = yield* waitFor(
             listMonitorsViaHttp(handler),
@@ -545,10 +520,7 @@ describe('monitor health', () => {
           const firstId = yield* registerViaHttp(handler)
           const secondId = yield* registerViaHttp(handler)
 
-          yield* Queue.offer(
-            observations,
-            yield* observationFor(handler, MonitorId.make(firstId), 200),
-          )
+          yield* Queue.offer(observations, yield* observationFor(handler, MonitorId.make(firstId), 200))
 
           const listed = yield* waitFor(listMonitorsViaHttp(handler), (monitors) =>
             monitors.some((entry) => entry.monitor.id === firstId && entry.health._tag === 'Some'),
@@ -584,34 +556,22 @@ describe('monitor health', () => {
         Effect.gen(function* () {
           const monitorId = yield* registerViaHttp(handler)
 
-          yield* Queue.offer(
-            observations,
-            yield* observationFor(handler, MonitorId.make(monitorId), 200),
-          )
+          yield* Queue.offer(observations, yield* observationFor(handler, MonitorId.make(monitorId), 200))
           yield* waitFor(
             listMonitorsViaHttp(handler),
-            (monitors) =>
-              monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Healthy',
+            (monitors) => monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Healthy',
           )
 
-          yield* Queue.offer(
-            observations,
-            yield* observationFor(handler, MonitorId.make(monitorId), 503),
-          )
+          yield* Queue.offer(observations, yield* observationFor(handler, MonitorId.make(monitorId), 503))
           yield* waitFor(
             listMonitorsViaHttp(handler),
-            (monitors) =>
-              monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Degraded',
+            (monitors) => monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Degraded',
           )
 
-          yield* Queue.offer(
-            observations,
-            yield* observationFor(handler, MonitorId.make(monitorId), 200),
-          )
+          yield* Queue.offer(observations, yield* observationFor(handler, MonitorId.make(monitorId), 200))
           yield* waitFor(
             listMonitorsViaHttp(handler),
-            (monitors) =>
-              monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Healthy',
+            (monitors) => monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Healthy',
           )
         }),
       )
@@ -636,9 +596,7 @@ describe('mattermost extra notification endpoints', () => {
     Effect.gen(function* () {
       const { notification } = yield* openClient
 
-      const error = yield* notification
-        .searchMattermostUsers({ payload: { term: 'jes' } })
-        .pipe(Effect.flip)
+      const error = yield* notification.searchMattermostUsers({ payload: { term: 'jes' } }).pipe(Effect.flip)
 
       expect(error).toMatchObject({ _tag: 'MattermostUnavailable' })
     }).pipe(
@@ -704,9 +662,7 @@ describe('schedule conversion', () => {
         {},
         {
           convert: () =>
-            Effect.fail(
-              new DescriptionNotConvertible({ description: 'nope', message: 'not schedulable' }),
-            ),
+            Effect.fail(new DescriptionNotConvertible({ description: 'nope', message: 'not schedulable' })),
         },
       ),
       (handler) =>
@@ -731,11 +687,7 @@ describe('schedule conversion', () => {
   it.effect('rejects an over-long description with 400', () =>
     withWebHandler(applicationLayer(), (handler) =>
       Effect.gen(function* () {
-        const response = yield* request(
-          handler,
-          '/cron',
-          json({ description: 'Every twenty-six seconds'.repeat(20) }),
-        )
+        const response = yield* request(handler, '/cron', json({ description: 'Every twenty-six seconds'.repeat(20) }))
 
         expect(response.status).toBe(400)
       }),

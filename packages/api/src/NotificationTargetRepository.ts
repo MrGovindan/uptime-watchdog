@@ -20,10 +20,9 @@ export interface Interface {
   ) => Effect.Effect<Option.Option<NotificationTarget>>
 }
 
-export class NotificationTargetRepository extends Context.Service<
-  NotificationTargetRepository,
-  Interface
->()('NotificationTargetRepository') {}
+export class NotificationTargetRepository extends Context.Service<NotificationTargetRepository, Interface>()(
+  'NotificationTargetRepository',
+) {}
 
 const isConflict = (error: SqlError.SqlError): boolean =>
   error.reason._tag === 'UniqueViolation' || error.reason._tag === 'ConstraintError'
@@ -43,20 +42,11 @@ const make = Effect.gen(function* () {
       `,
     })({ monitorId }).pipe(Effect.orDie)
 
-  const add = Effect.fn('NotificationTargetRepository.add')(function* (
-    monitorId: MonitorId,
-    user: MattermostUser,
-  ) {
+  const add = Effect.fn('NotificationTargetRepository.add')(function* (monitorId: MonitorId, user: MattermostUser) {
     const rows = yield* SqlSchema.findAll({
       Request: NotificationTarget.insert,
       Result: NotificationTarget,
-      execute: ({
-        monitorId,
-        mattermostUserId,
-        mattermostUsername,
-        mattermostDisplayName,
-        createdAt,
-      }) => sql`
+      execute: ({ monitorId, mattermostUserId, mattermostUsername, mattermostDisplayName, createdAt }) => sql`
         INSERT INTO notification_target
           (monitorId, mattermostUserId, mattermostUsername, mattermostDisplayName, createdAt)
         VALUES
@@ -74,9 +64,7 @@ const make = Effect.gen(function* () {
       Effect.catchTags({
         SqlError: (error) =>
           isConflict(error)
-            ? Effect.fail(
-                new NotificationTargetAlreadyExists({ monitorId, mattermostUserId: user.id }),
-              )
+            ? Effect.fail(new NotificationTargetAlreadyExists({ monitorId, mattermostUserId: user.id }))
             : Effect.die(error),
         SchemaError: (error) => Effect.die(error),
       }),

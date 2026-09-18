@@ -35,13 +35,11 @@ const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'F
 
 const pad = (value: number): string => value.toString().padStart(2, '0')
 
-const nameAt = (names: ReadonlyArray<string>, index: number): string =>
-  names[index] ?? index.toString()
+const nameAt = (names: ReadonlyArray<string>, index: number): string => names[index] ?? index.toString()
 
 const ordinal = (value: number): string => {
   const remainder = value % 100
-  const suffix =
-    remainder >= 11 && remainder <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][value % 10] ?? 'th')
+  const suffix = remainder >= 11 && remainder <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][value % 10] ?? 'th')
   return `${value}${suffix}`
 }
 
@@ -98,10 +96,7 @@ const toSpans = (values: ReadonlyArray<number>): ReadonlyArray<Span> => {
   return spans
 }
 
-const describeSequence = (
-  values: ReadonlyArray<number>,
-  format: (value: number) => string,
-): string =>
+const describeSequence = (values: ReadonlyArray<number>, format: (value: number) => string): string =>
   join(
     toSpans(values).map(({ start, end }) =>
       start === end ? format(start) : `${format(start)} through ${format(end)}`,
@@ -110,10 +105,7 @@ const describeSequence = (
 
 const formatTime = (hour: number, minute: number): string => `${pad(hour)}:${pad(minute)}`
 
-const timesFrom = (
-  hours: ReadonlyArray<number>,
-  minutes: ReadonlyArray<number>,
-): ReadonlyArray<string> =>
+const timesFrom = (hours: ReadonlyArray<number>, minutes: ReadonlyArray<number>): ReadonlyArray<string> =>
   hours.flatMap((hour) => minutes.map((minute) => formatTime(hour, minute)))
 
 const describeHours = (hours: Spread): string => {
@@ -137,15 +129,13 @@ const describeTime = (cron: Cron.Cron): string | undefined => {
   const minutes = spread(cron.minutes, bounds.minutes)
   const hours = spread(cron.hours, bounds.hours)
 
-  const secondsTrivial =
-    seconds._tag === 'Values' && seconds.values.length === 1 && seconds.values[0] === 0
+  const secondsTrivial = seconds._tag === 'Values' && seconds.values.length === 1 && seconds.values[0] === 0
 
   if (!secondsTrivial) {
     return describeSeconds(seconds, minutes, hours)
   }
 
-  const singleMinute =
-    minutes._tag === 'Values' && minutes.values.length === 1 ? minutes.values[0] : undefined
+  const singleMinute = minutes._tag === 'Values' && minutes.values.length === 1 ? minutes.values[0] : undefined
 
   if (minutes._tag === 'All') {
     return hours._tag === 'All' ? 'Every minute' : `Every minute during ${describeHours(hours)}`
@@ -210,9 +200,7 @@ const describeDate = (days: Spread, months: Spread): string => {
   }
 
   const daysText = `the ${describeSequence(days.values, ordinal)} of the month`
-  return monthText === undefined
-    ? `on ${daysText}`
-    : `on the ${describeSequence(days.values, ordinal)} of ${monthText}`
+  return monthText === undefined ? `on ${daysText}` : `on the ${describeSequence(days.values, ordinal)} of ${monthText}`
 }
 
 export const describeCron = (cron: Cron.Cron): string => {

@@ -1,13 +1,7 @@
 import { describe, expect, it } from '@effect/vitest'
 import { Duration, Effect, Fiber, Layer, Ref, Result } from 'effect'
 import { TestClock } from 'effect/testing'
-import {
-  Headers,
-  HttpClient,
-  HttpClientError,
-  HttpClientRequest,
-  HttpClientResponse,
-} from 'effect/unstable/http'
+import { Headers, HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from 'effect/unstable/http'
 import { fromInput as headersFromInput } from 'effect/unstable/http/Headers'
 import { CheckUptime, layer as checkUptimeUseCaseLayer } from './CheckUptime.ts'
 
@@ -62,10 +56,7 @@ describe(CheckUptime.name, () => {
       expect(response.status).toBe(200)
       expect(response.body).toBe('pong')
       expect(Duration.toMillis(response.duration)).toBe(0)
-    }).pipe(
-      Effect.provide(checkUptimeUseCaseLayer),
-      Effect.provide(testClient((request) => respond(request, 'pong'))),
-    ),
+    }).pipe(Effect.provide(checkUptimeUseCaseLayer), Effect.provide(testClient((request) => respond(request, 'pong')))),
   )
 
   it.effect('records a non-2xx status as a successful check', () =>
@@ -88,9 +79,7 @@ describe(CheckUptime.name, () => {
 
   it.effect('sends a request built from the monitor configuration', () => {
     // Arrange
-    const seen = Effect.runSync(
-      Ref.make<HttpClientRequest.HttpClientRequest | undefined>(undefined),
-    )
+    const seen = Effect.runSync(Ref.make<HttpClientRequest.HttpClientRequest | undefined>(undefined))
     const client = testClient((request) =>
       Ref.set(seen, request).pipe(Effect.as(HttpClientResponse.fromWeb(request, new Response('')))),
     )
@@ -117,9 +106,7 @@ describe(CheckUptime.name, () => {
     // Arrange
     const seen = Effect.runSync(Ref.make<string | undefined>(undefined))
     const client = testClient((request) =>
-      Ref.set(seen, request.url).pipe(
-        Effect.as(HttpClientResponse.fromWeb(request, new Response(''))),
-      ),
+      Ref.set(seen, request.url).pipe(Effect.as(HttpClientResponse.fromWeb(request, new Response('')))),
     )
 
     return Effect.gen(function* () {
@@ -157,9 +144,7 @@ describe(CheckUptime.name, () => {
       Effect.provide(checkUptimeUseCaseLayer),
       Effect.provide(
         testClient((request) =>
-          Effect.sleep(Duration.millis(500)).pipe(
-            Effect.as(HttpClientResponse.fromWeb(request, new Response('slow'))),
-          ),
+          Effect.sleep(Duration.millis(500)).pipe(Effect.as(HttpClientResponse.fromWeb(request, new Response('slow')))),
         ),
       ),
     ),

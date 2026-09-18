@@ -64,8 +64,7 @@ const makeLayers = (overrides: Partial<MattermostInterface> = {}) => {
       userId === mattermostUser.id
         ? Effect.succeed(mattermostUser)
         : Effect.fail(new MattermostUserNotFound({ mattermostUserId: userId })),
-    sendDirectMessage: (userId, message) =>
-      Queue.offer(messages, { userId, message }).pipe(Effect.asVoid),
+    sendDirectMessage: (userId, message) => Queue.offer(messages, { userId, message }).pipe(Effect.asVoid),
     ...overrides,
   })
 
@@ -77,11 +76,7 @@ const makeLayers = (overrides: Partial<MattermostInterface> = {}) => {
     Layer.provide(MonitorHealthAbsent),
     dependencies,
   )
-  const worker = NotificationWorker.layer.pipe(
-    Layer.provide(events),
-    Layer.provide(mattermost),
-    Layer.provide(targets),
-  )
+  const worker = NotificationWorker.layer.pipe(Layer.provide(events), Layer.provide(mattermost), Layer.provide(targets))
 
   return { layer: Layer.provideMerge(Layer.merge(groups, worker), events), messages }
 }

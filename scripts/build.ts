@@ -1,12 +1,4 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  symlinkSync,
-} from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
 
 const root = join(import.meta.dir, '..')
@@ -69,31 +61,16 @@ const main = async (): Promise<void> => {
   const finalDir = join(buildsDir, timestamp)
 
   if (existsSync(finalDir)) {
-    throw new Error(
-      `build ${timestamp} already exists; builds are timestamped to the minute in UTC, retry shortly`,
-    )
+    throw new Error(`build ${timestamp} already exists; builds are timestamped to the minute in UTC, retry shortly`)
   }
 
   const staging = join(buildsDir, `.tmp-${process.pid}-${Date.now()}`)
   mkdirSync(join(staging, 'web'), { recursive: true })
 
   try {
-    await run(
-      [
-        process.execPath,
-        'build',
-        apiEntry,
-        '--target=bun',
-        '--outfile',
-        join(staging, 'server.js'),
-      ],
-      root,
-    )
+    await run([process.execPath, 'build', apiEntry, '--target=bun', '--outfile', join(staging, 'server.js')], root)
 
-    await run(
-      [process.execPath, viteBin, 'build', '--outDir', join(staging, 'web'), '--emptyOutDir'],
-      webDir,
-    )
+    await run([process.execPath, viteBin, 'build', '--outDir', join(staging, 'web'), '--emptyOutDir'], webDir)
 
     await Bun.write(join(staging, 'run'), runScript)
     chmodSync(join(staging, 'run'), 0o755)

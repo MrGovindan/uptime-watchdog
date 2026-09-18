@@ -44,9 +44,7 @@ export const MonitorGroupLive = HttpApiBuilder.group(Api, 'monitor', (handlers) 
       .handle('list', () =>
         repository.list.pipe(
           Effect.map((monitors) =>
-            monitors.map((monitor) =>
-              Effect.map(health.getHealth(monitor.id), (health) => ({ monitor, health })),
-            ),
+            monitors.map((monitor) => Effect.map(health.getHealth(monitor.id), (health) => ({ monitor, health }))),
           ),
           Effect.flatMap(Effect.all),
         ),
@@ -59,8 +57,7 @@ export const MonitorGroupLive = HttpApiBuilder.group(Api, 'monitor', (handlers) 
 
           return yield* Option.match(updated, {
             onNone: () => Effect.fail(new MonitorNotFound({ monitorId: params.monitorId })),
-            onSome: (monitor) =>
-              events.publish({ _tag: 'MonitorUpdated', monitor }).pipe(Effect.as(monitor)),
+            onSome: (monitor) => events.publish({ _tag: 'MonitorUpdated', monitor }).pipe(Effect.as(monitor)),
           })
         }),
       )
@@ -76,9 +73,7 @@ export const MonitorGroupLive = HttpApiBuilder.group(Api, 'monitor', (handlers) 
       )
 
       .handle('listNotificationTargets', ({ params }) =>
-        ensureMonitor(repository, params.monitorId).pipe(
-          Effect.flatMap(() => targets.list(params.monitorId)),
-        ),
+        ensureMonitor(repository, params.monitorId).pipe(Effect.flatMap(() => targets.list(params.monitorId))),
       )
 
       .handle(
@@ -99,8 +94,7 @@ export const MonitorGroupLive = HttpApiBuilder.group(Api, 'monitor', (handlers) 
           const removedTarget = yield* targets.remove(monitor.id, params.mattermostUserId)
           yield* Option.match(removedTarget, {
             onNone: () => Effect.void,
-            onSome: (target) =>
-              events.publish({ _tag: 'NotificationTargetRemoved', monitor, target }),
+            onSome: (target) => events.publish({ _tag: 'NotificationTargetRemoved', monitor, target }),
           })
         }),
       )
@@ -114,10 +108,7 @@ export const NotificationGroupLive = HttpApiBuilder.group(Api, 'notification', (
     return handlers
       .handle('searchMattermostUsers', ({ payload }) => mattermost.searchUsers(payload.term))
       .handle('sendMattermostTest', ({ payload }) =>
-        mattermost.sendDirectMessage(
-          payload.mattermostUserId,
-          NotificationMessages.testForMonitor(),
-        ),
+        mattermost.sendDirectMessage(payload.mattermostUserId, NotificationMessages.testForMonitor()),
       )
   }),
 )

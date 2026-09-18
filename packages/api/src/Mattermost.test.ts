@@ -1,12 +1,7 @@
 import { MattermostUnavailable, MattermostUserNotFound } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
 import { Effect, Exit, Layer, Redacted, Ref } from 'effect'
-import {
-  type HttpClientRequest,
-  HttpClient,
-  HttpClientError,
-  HttpClientResponse,
-} from 'effect/unstable/http'
+import { type HttpClientRequest, HttpClient, HttpClientError, HttpClientResponse } from 'effect/unstable/http'
 import * as Mattermost from './Mattermost'
 
 const options = {
@@ -75,9 +70,7 @@ describe(Mattermost.Mattermost.name, () => {
     }).pipe(
       Effect.provide(
         serviceLayer((request) =>
-          request.url.endsWith('/users/me')
-            ? me(request)
-            : jsonResponse(request, { message: 'not found' }, 404),
+          request.url.endsWith('/users/me') ? me(request) : jsonResponse(request, { message: 'not found' }, 404),
         ),
       ),
     ),
@@ -96,11 +89,7 @@ describe(Mattermost.Mattermost.name, () => {
         serviceLayer((request) =>
           request.url.endsWith('/users/me')
             ? me(request)
-            : jsonResponse(
-                request,
-                { message: 'You do not have permission to view this user.' },
-                403,
-              ),
+            : jsonResponse(request, { message: 'You do not have permission to view this user.' }, 403),
         ),
       ),
     ),
@@ -110,9 +99,7 @@ describe(Mattermost.Mattermost.name, () => {
     Effect.gen(function* () {
       const mattermost = yield* Mattermost.Mattermost
 
-      const error = yield* mattermost
-        .sendDirectMessage('user-1', 'monitor is down')
-        .pipe(Effect.flip)
+      const error = yield* mattermost.sendDirectMessage('user-1', 'monitor is down').pipe(Effect.flip)
 
       expect(error).toBeInstanceOf(MattermostUnavailable)
       expect(error.message).toBe(
@@ -146,9 +133,7 @@ describe(Mattermost.Mattermost.name, () => {
       expect(error.message).toBe('Something went wrong with the server.')
     }).pipe(
       Effect.provide(
-        serviceLayer((request) =>
-          jsonResponse(request, { message: 'Something went wrong with the server.' }, 500),
-        ),
+        serviceLayer((request) => jsonResponse(request, { message: 'Something went wrong with the server.' }, 500)),
       ),
     ),
   )
@@ -183,9 +168,7 @@ describe(Mattermost.Mattermost.name, () => {
   )
 
   it.effect('opens a direct channel and posts the message', () => {
-    const seen = Effect.runSync(
-      Ref.make<ReadonlyArray<Readonly<{ method: string; url: string; body: string }>>>([]),
-    )
+    const seen = Effect.runSync(Ref.make<ReadonlyArray<Readonly<{ method: string; url: string; body: string }>>>([]))
 
     const handler: Handler = (request) =>
       Effect.gen(function* () {
@@ -237,9 +220,7 @@ describe(Mattermost.Mattermost.name, () => {
     Effect.gen(function* () {
       const exit = yield* Effect.exit(
         Mattermost.Mattermost.pipe(
-          Effect.provide(
-            serviceLayer((request) => jsonResponse(request, { message: 'unauthorized' }, 401)),
-          ),
+          Effect.provide(serviceLayer((request) => jsonResponse(request, { message: 'unauthorized' }, 401))),
         ),
       )
 

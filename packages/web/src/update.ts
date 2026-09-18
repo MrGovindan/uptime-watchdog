@@ -1,10 +1,4 @@
-import {
-  Monitor,
-  MonitorHealth,
-  MonitorId,
-  MonitorWithHealth,
-  WatchdogEvent,
-} from '@uptime-watchdog/common'
+import { Monitor, MonitorHealth, MonitorId, MonitorWithHealth, WatchdogEvent } from '@uptime-watchdog/common'
 import { Array, Option } from 'effect'
 import { AsyncData, Update } from 'foldkit'
 import { NotValidated } from 'foldkit/fieldValidation'
@@ -42,9 +36,7 @@ const withMonitorData = (model: Model, data: ReadonlyArray<MonitorWithHealth>): 
 const upsertMonitor = (model: Model, monitor: Monitor): Model => {
   const existing = monitorEntries(model)
   const data = Array.some(existing, (entry) => entry.monitor.id === monitor.id)
-    ? Array.map(existing, (entry) =>
-        entry.monitor.id === monitor.id ? { monitor, health: entry.health } : entry,
-      )
+    ? Array.map(existing, (entry) => (entry.monitor.id === monitor.id ? { monitor, health: entry.health } : entry))
     : [{ monitor, health: Option.none() }, ...existing]
 
   return withMonitorData(model, data)
@@ -62,11 +54,7 @@ const replaceMonitor = (model: Model, monitor: Monitor): Model => {
   return withMonitorData(model, data)
 }
 
-const updateMonitorHealth = (
-  model: Model,
-  monitor: Monitor,
-  health: Option.Option<MonitorHealth>,
-): Model => {
+const updateMonitorHealth = (model: Model, monitor: Monitor, health: Option.Option<MonitorHealth>): Model => {
   if (!AsyncData.hasData(model.monitors)) {
     return model
   }
@@ -96,10 +84,8 @@ const foldWatchdogEvent = (model: Model, event: WatchdogEvent): Model =>
     MonitorRegistered: ({ monitor }) => upsertMonitor(model, monitor),
     MonitorUpdated: ({ monitor }) => replaceMonitor(model, monitor),
     MonitorDeleted: ({ monitor }) => removeMonitor(model, monitor.id),
-    MonitorHealthy: ({ monitor, health }) =>
-      updateMonitorHealth(model, monitor, Option.some(health)),
-    MonitorDegraded: ({ monitor, health }) =>
-      updateMonitorHealth(model, monitor, Option.some(health)),
+    MonitorHealthy: ({ monitor, health }) => updateMonitorHealth(model, monitor, Option.some(health)),
+    MonitorDegraded: ({ monitor, health }) => updateMonitorHealth(model, monitor, Option.some(health)),
     NotificationTargetAdded: () => model,
     NotificationTargetRemoved: () => model,
   })
@@ -135,8 +121,7 @@ export const update = (model: Model, message: Message) =>
         }),
       ),
 
-    GotAddMonitorDialogMessage: ({ message: dialogMessage }) =>
-      foldAddMonitorDialog(model, dialogMessage),
+    GotAddMonitorDialogMessage: ({ message: dialogMessage }) => foldAddMonitorDialog(model, dialogMessage),
 
     UpdatedName: ({ value }) => ({
       model: evo(model, {
@@ -213,9 +198,7 @@ export const update = (model: Model, message: Message) =>
       model: evo(model, {
         form: (form: Form) =>
           evo(form, {
-            headers: Array.map((header) =>
-              header.id === id ? { ...header, name: NotValidated({ value }) } : header,
-            ),
+            headers: Array.map((header) => (header.id === id ? { ...header, name: NotValidated({ value }) } : header)),
           }),
       }),
     }),
@@ -224,9 +207,7 @@ export const update = (model: Model, message: Message) =>
       model: evo(model, {
         form: (form: Form) =>
           evo(form, {
-            headers: Array.map((header) =>
-              header.id === id ? { ...header, value: NotValidated({ value }) } : header,
-            ),
+            headers: Array.map((header) => (header.id === id ? { ...header, value: NotValidated({ value }) } : header)),
           }),
       }),
     }),
@@ -261,10 +242,7 @@ export const update = (model: Model, message: Message) =>
 
       return {
         model: closed.model,
-        commands: [
-          UpdateMonitor({ monitorId: model.editingMonitorId.value, definition }),
-          ...(closed.commands ?? []),
-        ],
+        commands: [UpdateMonitor({ monitorId: model.editingMonitorId.value, definition }), ...(closed.commands ?? [])],
       }
     },
 
@@ -274,8 +252,7 @@ export const update = (model: Model, message: Message) =>
         payload: { message: 'Monitor created' },
       }),
 
-    FailedRegisterMonitor: ({ error }) =>
-      foldShowToast(model, { variant: 'Error', payload: { message: error } }),
+    FailedRegisterMonitor: ({ error }) => foldShowToast(model, { variant: 'Error', payload: { message: error } }),
 
     CompletedUpdateMonitor: ({ monitor }) =>
       foldShowToast(replaceMonitor(model, monitor), {
@@ -283,8 +260,7 @@ export const update = (model: Model, message: Message) =>
         payload: { message: 'Monitor updated' },
       }),
 
-    FailedUpdateMonitor: ({ error }) =>
-      foldShowToast(model, { variant: 'Error', payload: { message: error } }),
+    FailedUpdateMonitor: ({ error }) => foldShowToast(model, { variant: 'Error', payload: { message: error } }),
 
     ClickedRequestDeleteMonitor: ({ monitor }) =>
       foldOpenDeleteMonitorDialog(evo(model, { maybeDeleteMonitor: () => Option.some(monitor) })),
@@ -300,15 +276,11 @@ export const update = (model: Model, message: Message) =>
 
       return {
         model: closed.model,
-        commands: [
-          DeleteMonitor({ monitorId: model.maybeDeleteMonitor.value.id }),
-          ...(closed.commands ?? []),
-        ],
+        commands: [DeleteMonitor({ monitorId: model.maybeDeleteMonitor.value.id }), ...(closed.commands ?? [])],
       }
     },
 
-    GotDeleteMonitorDialogMessage: ({ message: dialogMessage }) =>
-      foldDeleteMonitorDialog(model, dialogMessage),
+    GotDeleteMonitorDialogMessage: ({ message: dialogMessage }) => foldDeleteMonitorDialog(model, dialogMessage),
 
     CompletedDeleteMonitor: ({ monitorId }) =>
       foldShowToast(removeMonitor(model, monitorId), {
@@ -316,8 +288,7 @@ export const update = (model: Model, message: Message) =>
         payload: { message: 'Monitor deleted' },
       }),
 
-    FailedDeleteMonitor: ({ error }) =>
-      foldShowToast(model, { variant: 'Error', payload: { message: error } }),
+    FailedDeleteMonitor: ({ error }) => foldShowToast(model, { variant: 'Error', payload: { message: error } }),
 
     ClickedOpenNotificationTargets: ({ monitorId, monitorName }) =>
       foldOpenNotificationTargets({ monitorId, monitorName })(model),

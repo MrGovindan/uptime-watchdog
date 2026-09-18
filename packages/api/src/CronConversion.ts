@@ -71,15 +71,10 @@ const fromAiError = (
 export interface Interface {
   readonly convert: (
     description: CronDescription,
-  ) => Effect.Effect<
-    ScheduleConversion,
-    ProviderUnavailable | TokensExhausted | DescriptionNotConvertible
-  >
+  ) => Effect.Effect<ScheduleConversion, ProviderUnavailable | TokensExhausted | DescriptionNotConvertible>
 }
 
-export class CronConversion extends Context.Service<CronConversion, Interface>()(
-  'CronConversion',
-) {}
+export class CronConversion extends Context.Service<CronConversion, Interface>()('CronConversion') {}
 
 export const make = Effect.gen(function* () {
   const languageModel = yield* LanguageModel.LanguageModel

@@ -7,8 +7,6 @@ export const ScheduleGroupLive = HttpApiBuilder.group(Api, 'schedule', (handlers
   Effect.gen(function* () {
     const conversion = yield* CronConversion
 
-    return handlers.handle('convertDescription', ({ payload: { description } }) =>
-      conversion.convert(description),
-    )
+    return handlers.handle('convertDescription', ({ payload: { description } }) => conversion.convert(description))
   }),
 )

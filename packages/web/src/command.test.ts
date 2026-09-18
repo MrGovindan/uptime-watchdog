@@ -35,11 +35,7 @@ const definition = Schema.decodeSync(MonitorDefinition)({
   expectedStatus: 200,
 })
 
-const jsonResponse = (
-  request: HttpClientRequest.HttpClientRequest,
-  status: number,
-  body: unknown,
-) =>
+const jsonResponse = (request: HttpClientRequest.HttpClientRequest, status: number, body: unknown) =>
   HttpClientResponse.fromWeb(
     request,
     new Response(JSON.stringify(body), {
@@ -59,9 +55,7 @@ const run = <A, E>(effect: Effect.Effect<A, E, ApiClient>, client: HttpClient.Ht
 describe('ListMonitors', () => {
   test('decodes the monitor list on success', async () => {
     const client = HttpClient.make((request) =>
-      Effect.sync(() =>
-        jsonResponse(request, 200, [{ monitor: monitorJson, health: { _tag: 'None' } }]),
-      ),
+      Effect.sync(() => jsonResponse(request, 200, [{ monitor: monitorJson, health: { _tag: 'None' } }])),
     )
 
     const message = await run(ListMonitors().effect, client)
@@ -74,9 +68,7 @@ describe('ListMonitors', () => {
   })
 
   test('reports a failure when the request fails', async () => {
-    const client = HttpClient.make((request) =>
-      Effect.sync(() => jsonResponse(request, 500, { error: 'boom' })),
-    )
+    const client = HttpClient.make((request) => Effect.sync(() => jsonResponse(request, 500, { error: 'boom' })))
 
     const message = await run(ListMonitors().effect, client)
 
@@ -109,9 +101,7 @@ describe('RegisterMonitor', () => {
   })
 
   test('reports a failure when the server rejects the definition', async () => {
-    const client = HttpClient.make((request) =>
-      Effect.sync(() => jsonResponse(request, 400, { error: 'bad request' })),
-    )
+    const client = HttpClient.make((request) => Effect.sync(() => jsonResponse(request, 400, { error: 'bad request' })))
 
     const message = await run(RegisterMonitor({ definition }).effect, client)
 

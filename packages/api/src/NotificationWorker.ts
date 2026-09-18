@@ -18,18 +18,11 @@ export interface Interface {
   readonly deliver: (event: WatchdogEvent) => Effect.Effect<void>
 }
 
-export class NotificationWorker extends Context.Service<NotificationWorker, Interface>()(
-  'NotificationWorker',
-) {}
+export class NotificationWorker extends Context.Service<NotificationWorker, Interface>()('NotificationWorker') {}
 
-const retrySchedule = Schedule.max([Schedule.exponential('200 millis'), Schedule.recurs(2)]).pipe(
-  Schedule.jittered,
-)
+const retrySchedule = Schedule.max([Schedule.exponential('200 millis'), Schedule.recurs(2)]).pipe(Schedule.jittered)
 
-const targetDeliveries = (
-  targets: ReadonlyArray<NotificationTarget>,
-  message: string,
-): ReadonlyArray<Delivery> =>
+const targetDeliveries = (targets: ReadonlyArray<NotificationTarget>, message: string): ReadonlyArray<Delivery> =>
   Array.map(targets, (target) => ({ userId: target.mattermostUserId, message }))
 
 const make = Effect.gen(function* () {
@@ -39,17 +32,12 @@ const make = Effect.gen(function* () {
   const healthStates = yield* Ref.make(HashMap.empty<MonitorId, MonitorHealth['_tag']>())
 
   const notifyTargets = (monitor: Monitor, message: string) =>
-    targets
-      .list(monitor.id)
-      .pipe(Effect.map((healthTargets) => targetDeliveries(healthTargets, message)))
+    targets.list(monitor.id).pipe(Effect.map((healthTargets) => targetDeliveries(healthTargets, message)))
 
   // Health events are snapshots published on every check; a notification is only
   // warranted when the tag differs from the previous observation.
   const recordHealth = (monitor: Monitor, tag: MonitorHealth['_tag']) =>
-    Ref.modify(healthStates, (current) => [
-      HashMap.get(current, monitor.id),
-      HashMap.set(current, monitor.id, tag),
-    ])
+    Ref.modify(healthStates, (current) => [HashMap.get(current, monitor.id), HashMap.set(current, monitor.id, tag)])
 
   const deliveries = (event: WatchdogEvent): Effect.Effect<ReadonlyArray<Delivery>> =>
     WatchdogEvent.match(event, {

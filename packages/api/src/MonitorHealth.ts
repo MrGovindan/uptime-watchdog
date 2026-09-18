@@ -12,9 +12,7 @@ export interface Interface {
 export class MonitorHealth extends Context.Service<MonitorHealth, Interface>()('MonitorHealth') {}
 
 const healthEvent = (monitor: Monitor, health: MonitorHealthState): WatchdogEvent =>
-  health._tag === 'Healthy'
-    ? { _tag: 'MonitorHealthy', monitor, health }
-    : { _tag: 'MonitorDegraded', monitor, health }
+  health._tag === 'Healthy' ? { _tag: 'MonitorHealthy', monitor, health } : { _tag: 'MonitorDegraded', monitor, health }
 
 const make = Effect.gen(function* () {
   const streams = yield* MonitorStreams.MonitorStreams
@@ -36,8 +34,7 @@ const make = Effect.gen(function* () {
   yield* events.stream.pipe(
     Stream.runForEach((event) =>
       WatchdogEvent.match(event, {
-        MonitorDeleted: ({ monitor }) =>
-          Ref.update(healths, (current) => HashMap.remove(current, monitor.id)),
+        MonitorDeleted: ({ monitor }) => Ref.update(healths, (current) => HashMap.remove(current, monitor.id)),
         MonitorRegistered: () => Effect.void,
         MonitorUpdated: () => Effect.void,
         NotificationTargetAdded: () => Effect.void,

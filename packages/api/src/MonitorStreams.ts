@@ -1,9 +1,4 @@
-import {
-  Monitor,
-  type MonitorId,
-  type MonitorObservation,
-  type UptimeObservation,
-} from '@uptime-watchdog/common'
+import { Monitor, type MonitorId, type MonitorObservation, type UptimeObservation } from '@uptime-watchdog/common'
 import { Context, Effect, Layer, Schedule, Stream } from 'effect'
 import * as CheckUptime from './CheckUptime'
 import { MonitorRepository } from './MonitorRepository'
@@ -18,9 +13,7 @@ export interface Interface {
   readonly observations: Stream.Stream<MonitorObservation>
 }
 
-export class MonitorStreams extends Context.Service<MonitorStreams, Interface>()(
-  'MonitorStreams',
-) {}
+export class MonitorStreams extends Context.Service<MonitorStreams, Interface>()('MonitorStreams') {}
 
 const createMonitorStream = (monitor: Monitor, checkUptime: CheckUptime.Interface) =>
   Stream.fromEffectSchedule(

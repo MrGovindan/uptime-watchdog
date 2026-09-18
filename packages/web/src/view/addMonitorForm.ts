@@ -13,14 +13,7 @@ import {
   toProtocol,
 } from '../monitorForm'
 import type { Model } from '../model'
-import {
-  SECONDARY_BUTTON_CLASS,
-  fieldInput,
-  plainInput,
-  primaryButton,
-  secondaryButton,
-  selectInput,
-} from './field'
+import { SECONDARY_BUTTON_CLASS, fieldInput, plainInput, primaryButton, secondaryButton, selectInput } from './field'
 
 const headerRowView = (header: HeaderRow, h: HtmlBuilder<Message>): Html =>
   h.keyed('div')(
@@ -80,20 +73,12 @@ export const addMonitorForm = (
       h.OnSubmit(isEditing ? Message.ClickedUpdateMonitor() : Message.ClickedCreateMonitor()),
     ],
     [
-      fieldInput(
-        'monitor-name',
-        'Name',
-        model.form.name,
-        (value) => Message.UpdatedName({ value }),
-        'text',
-        h,
-        {
-          counter: {
-            text: `${monitorNameCount(model.form.name.value)}/${MONITOR_NAME_MAX_LENGTH}`,
-            isInvalid: isMonitorNameTooLong(model.form.name.value),
-          },
+      fieldInput('monitor-name', 'Name', model.form.name, (value) => Message.UpdatedName({ value }), 'text', h, {
+        counter: {
+          text: `${monitorNameCount(model.form.name.value)}/${MONITOR_NAME_MAX_LENGTH}`,
+          isInvalid: isMonitorNameTooLong(model.form.name.value),
         },
-      ),
+      }),
       fieldInput(
         'monitor-hostname',
         'Hostname',
@@ -102,14 +87,7 @@ export const addMonitorForm = (
         'text',
         h,
       ),
-      fieldInput(
-        'monitor-port',
-        'Port',
-        model.form.port,
-        (value) => Message.UpdatedPort({ value }),
-        'text',
-        h,
-      ),
+      fieldInput('monitor-port', 'Port', model.form.port, (value) => Message.UpdatedPort({ value }), 'text', h),
       selectInput(
         'monitor-protocol',
         'Protocol',
@@ -129,13 +107,7 @@ export const addMonitorForm = (
           }),
         h,
       ),
-      plainInput(
-        'monitor-path',
-        'Path (optional)',
-        model.form.path,
-        (value) => Message.UpdatedPath({ value }),
-        h,
-      ),
+      plainInput('monitor-path', 'Path (optional)', model.form.path, (value) => Message.UpdatedPath({ value }), h),
       fieldInput(
         'monitor-cron',
         'Cron schedule',

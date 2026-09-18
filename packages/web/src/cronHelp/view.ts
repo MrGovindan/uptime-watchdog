@@ -14,15 +14,13 @@ const INPUT_CLASS =
   'w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
 const ERROR_CLASS = 'text-sm text-red-600'
 const THINKING_CLASS = 'text-sm italic text-gray-400'
-const CRON_CODE_CLASS =
-  'rounded-md border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-sm text-gray-900'
+const CRON_CODE_CLASS = 'rounded-md border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-sm text-gray-900'
 const DESCRIPTION_CLASS = 'mt-1 text-sm text-gray-500'
 const DIALOG_CLASS = 'fixed inset-0 z-50 grid place-items-center p-4'
 const BACKDROP_CLASS = 'fixed inset-0 bg-black/40'
 const PANEL_CLASS = 'relative z-10 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl'
 const CLOSE_BUTTON_CLASS = 'rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-const BUTTON_CLASS =
-  'rounded-md px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500'
+const BUTTON_CLASS = 'rounded-md px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500'
 const PRIMARY_BUTTON_CLASS = `${BUTTON_CLASS} bg-blue-600 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50`
 const SECONDARY_BUTTON_CLASS = `${BUTTON_CLASS} border border-gray-300 bg-white text-gray-700 hover:bg-gray-50`
 
@@ -38,14 +36,9 @@ const failureMessage = (failure: Failure): string =>
     Match.orElse(() => ''),
   )
 
-const isConvertable = (description: string): boolean =>
-  Option.isSome(Schema.decodeOption(CronDescription)(description))
+const isConvertable = (description: string): boolean => Option.isSome(Schema.decodeOption(CronDescription)(description))
 
-const descriptionInput = (
-  description: string,
-  isDisabled: boolean,
-  h: HtmlBuilder<Message>,
-): Html =>
+const descriptionInput = (description: string, isDisabled: boolean, h: HtmlBuilder<Message>): Html =>
   Input.view(
     {
       id: 'cron-description',
@@ -60,9 +53,7 @@ const descriptionInput = (
             h.input([
               ...attributes.input,
               h.AriaLabel('Schedule description'),
-              h.Class(
-                `${INPUT_CLASS} ${isDisabled ? 'border-gray-200 bg-gray-50 text-gray-500' : 'border-gray-300'}`,
-              ),
+              h.Class(`${INPUT_CLASS} ${isDisabled ? 'border-gray-200 bg-gray-50 text-gray-500' : 'border-gray-300'}`),
             ]),
           ],
         ),
@@ -103,11 +94,7 @@ const dialogBody = (state: State, h: HtmlBuilder<Message>): Html => {
           : state.failure._tag === 'Unavailable'
             ? [
                 h.button(
-                  [
-                    h.Class(SECONDARY_BUTTON_CLASS),
-                    h.Type('button'),
-                    h.OnClick(Message.ClickedRetry()),
-                  ],
+                  [h.Class(SECONDARY_BUTTON_CLASS), h.Type('button'), h.OnClick(Message.ClickedRetry())],
                   ['Try again'],
                 ),
               ]
@@ -131,10 +118,7 @@ const resultView = (cron: string, h: HtmlBuilder<Message>): Html =>
           }),
         ],
       ),
-      h.button(
-        [h.Class(PRIMARY_BUTTON_CLASS), h.Type('button'), h.OnClick(Message.ClickedAccept())],
-        ['Accept'],
-      ),
+      h.button([h.Class(PRIMARY_BUTTON_CLASS), h.Type('button'), h.OnClick(Message.ClickedAccept())], ['Accept']),
     ],
   )
 
@@ -163,10 +147,7 @@ export const view = Submodel.defineView<Model, Message>((model, h): Html =>
                   [h.Class('flex items-start justify-between gap-4')],
                   [
                     h.h2([...title, h.Class('text-lg font-semibold')], ['Describe your schedule']),
-                    h.button(
-                      [...closeButton, h.Class(CLOSE_BUTTON_CLASS), h.AriaLabel('Close')],
-                      ['×'],
-                    ),
+                    h.button([...closeButton, h.Class(CLOSE_BUTTON_CLASS), h.AriaLabel('Close')], ['×']),
                   ],
                 ),
                 h.p(

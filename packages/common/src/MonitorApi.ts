@@ -108,22 +108,13 @@ export const Api = HttpApi.make('UptimeWatchdog')
         params: { monitorId: MonitorId },
         payload: NotificationTargetDefinition,
         success: NotificationTarget.json.pipe(HttpApiSchema.status(201)),
-        error: [
-          MonitorNotFound,
-          NotificationTargetAlreadyExists,
-          MattermostUserNotFound,
-          MattermostUnavailable,
-        ],
+        error: [MonitorNotFound, NotificationTargetAlreadyExists, MattermostUserNotFound, MattermostUnavailable],
       }),
-      HttpApiEndpoint.delete(
-        'removeNotificationTarget',
-        '/monitor/:monitorId/notification-target/:mattermostUserId',
-        {
-          params: { monitorId: MonitorId, mattermostUserId: MattermostUserId },
-          success: HttpApiSchema.NoContent,
-          error: MonitorNotFound,
-        },
-      ),
+      HttpApiEndpoint.delete('removeNotificationTarget', '/monitor/:monitorId/notification-target/:mattermostUserId', {
+        params: { monitorId: MonitorId, mattermostUserId: MattermostUserId },
+        success: HttpApiSchema.NoContent,
+        error: MonitorNotFound,
+      }),
     ),
   )
   .add(

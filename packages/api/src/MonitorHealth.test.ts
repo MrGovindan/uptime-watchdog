@@ -39,10 +39,7 @@ const makeEnvironment = () => {
     observations: Stream.fromQueue(observations),
   })
   const events = WatchdogEvents.layer
-  const layer = Layer.provideMerge(
-    HealthService.layer.pipe(Layer.provide(streamsStub), Layer.provide(events)),
-    events,
-  )
+  const layer = Layer.provideMerge(HealthService.layer.pipe(Layer.provide(streamsStub), Layer.provide(events)), events)
 
   return { observations, layer }
 }
@@ -50,9 +47,7 @@ const makeEnvironment = () => {
 const subscribe = (events: WatchdogEvents.Interface) =>
   Effect.gen(function* () {
     const collected = yield* Queue.unbounded<WatchdogEvent>()
-    const forEach = events.stream.pipe(
-      Stream.runForEach((event) => Queue.offer(collected, event).pipe(Effect.asVoid)),
-    )
+    const forEach = events.stream.pipe(Stream.runForEach((event) => Queue.offer(collected, event).pipe(Effect.asVoid)))
     yield* forEach.pipe(Effect.forkChild)
     yield* Effect.yieldNow
     return collected
@@ -126,9 +121,7 @@ describe('MonitorHealth', () => {
       expect(Option.isNone(yield* health.getHealth(monitorId))).toBe(true)
 
       yield* Queue.offer(env.observations, observation(500))
-      const degraded = Option.getOrThrow(
-        yield* waitForSome(health.getHealth(monitorId), Option.isSome),
-      )
+      const degraded = Option.getOrThrow(yield* waitForSome(health.getHealth(monitorId), Option.isSome))
       expect(degraded._tag).toBe('Degraded')
 
       yield* events.publish({ _tag: 'MonitorDeleted', monitor, targets: [] })
