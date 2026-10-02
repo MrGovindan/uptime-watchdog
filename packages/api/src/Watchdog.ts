@@ -2,6 +2,7 @@ import { Effect, Layer, Stream } from 'effect'
 import { HttpStaticServer } from 'effect/http'
 import * as Database from './Database'
 import * as MonitorApi from './MonitorApi'
+import * as MonitorDirectory from './MonitorDirectory'
 import * as MonitorHealth from './MonitorHealth'
 import * as MonitorRepository from './MonitorRepository'
 import * as MonitorStreams from './MonitorStreams'
@@ -23,7 +24,8 @@ export const layer = (options: Options) => {
   const streams = MonitorStreams.layer.pipe(Layer.provide(events), Layer.provide(monitors))
   const health = MonitorHealth.layer.pipe(Layer.provide(streams), Layer.provide(events))
   const worker = NotificationWorker.layer.pipe(Layer.provide(events), Layer.provide(targets))
-  const services = Layer.mergeAll(events, monitors, targets, streams, health, worker)
+  const directory = MonitorDirectory.layer.pipe(Layer.provide(monitors), Layer.provide(targets), Layer.provide(events))
+  const services = Layer.mergeAll(events, monitors, targets, streams, health, worker, directory)
 
   const observability = Layer.effectDiscard(
     Effect.gen(function* () {

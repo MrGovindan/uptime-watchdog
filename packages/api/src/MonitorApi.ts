@@ -1,47 +1,23 @@
-import { Api, type Monitor, type MonitorId, MonitorNotFound, toMonitorHealth } from '@uptime-watchdog/common'
-import { Effect, Layer, Option } from 'effect'
+import { Api, toMonitorHealth } from '@uptime-watchdog/common'
+import { Effect, Layer } from 'effect'
 import { HttpApiBuilder } from 'effect/http-api'
 import { Mattermost } from './Mattermost'
+import { MonitorDirectory } from './MonitorDirectory'
 import { MonitorRepository } from './MonitorRepository'
-import type { Interface as MonitorRepositoryInterface } from './MonitorRepository'
 import { MonitorHealth } from './MonitorHealth'
 import { MonitorStreams } from './MonitorStreams'
 import * as NotificationMessages from './NotificationMessages'
-import { NotificationTargetRepository } from './NotificationTargetRepository'
 import { ScheduleGroupLive } from './ScheduleApi'
-import { WatchdogEvents } from './WatchdogEvents'
-
-const ensureMonitor = (
-  repository: MonitorRepositoryInterface,
-  monitorId: MonitorId,
-): Effect.Effect<Monitor, MonitorNotFound> =>
-  repository.find(monitorId).pipe(
-    Effect.flatMap(
-      Option.match({
-        onNone: () => Effect.fail(new MonitorNotFound({ monitorId })),
-        onSome: (monitor) => Effect.succeed(monitor),
-      }),
-    ),
-  )
 
 export const MonitorGroupLive = HttpApiBuilder.group(Api, 'monitor', (handlers) =>
   Effect.gen(function* () {
     const repository = yield* MonitorRepository
-    const targets = yield* NotificationTargetRepository
-    const mattermost = yield* Mattermost
-    const events = yield* WatchdogEvents
+    const directory = yield* MonitorDirectory
     const health = yield* MonitorHealth
     const streams = yield* MonitorStreams
 
     return handlers
-      .handle(
-        'register',
-        Effect.fn(function* ({ payload }) {
-          const monitor = yield* repository.register(payload)
-          yield* events.publish({ _tag: 'MonitorRegistered', monitor })
-          return monitor
-        }),
-      )
+      .handle('register', ({ payload }) => directory.register(payload))
 
       .handle('list', () =>
         repository.list.pipe(
@@ -52,62 +28,27 @@ export const MonitorGroupLive = HttpApiBuilder.group(Api, 'monitor', (handlers) 
         ),
       )
 
-      .handle(
-        'updateMonitor',
-        Effect.fn(function* ({ params, payload }) {
-          const updated = yield* repository.update(params.monitorId, payload)
+      .handle('updateMonitor', ({ params, payload }) => directory.update(params.monitorId, payload))
 
-          return yield* Option.match(updated, {
-            onNone: () => Effect.fail(new MonitorNotFound({ monitorId: params.monitorId })),
-            onSome: (monitor) => events.publish({ _tag: 'MonitorUpdated', monitor }).pipe(Effect.as(monitor)),
-          })
-        }),
-      )
-
-      .handle(
-        'deleteMonitor',
-        Effect.fn(function* ({ params }) {
-          const monitor = yield* ensureMonitor(repository, params.monitorId)
-          const notificationTargets = yield* targets.list(monitor.id)
-          yield* repository.delete(monitor.id)
-          yield* events.publish({ _tag: 'MonitorDeleted', monitor, targets: notificationTargets })
-        }),
-      )
+      .handle('deleteMonitor', ({ params }) => directory.delete(params.monitorId))
 
       .handle(
         'checkMonitor',
         Effect.fn(function* ({ params }) {
-          const monitor = yield* ensureMonitor(repository, params.monitorId)
+          const monitor = yield* directory.find(params.monitorId)
           const observation = yield* streams.checkNow(monitor)
           return toMonitorHealth(observation, monitor.expectedStatus)
         }),
       )
 
-      .handle('listNotificationTargets', ({ params }) =>
-        ensureMonitor(repository, params.monitorId).pipe(Effect.flatMap(() => targets.list(params.monitorId))),
+      .handle('listNotificationTargets', ({ params }) => directory.listTargets(params.monitorId))
+
+      .handle('addNotificationTarget', ({ params, payload }) =>
+        directory.addTarget(params.monitorId, payload.mattermostUserId),
       )
 
-      .handle(
-        'addNotificationTarget',
-        Effect.fn(function* ({ params, payload }) {
-          const monitor = yield* ensureMonitor(repository, params.monitorId)
-          const user = yield* mattermost.getUser(payload.mattermostUserId)
-          const target = yield* targets.add(monitor.id, user)
-          yield* events.publish({ _tag: 'NotificationTargetAdded', monitor, target })
-          return target
-        }),
-      )
-
-      .handle(
-        'removeNotificationTarget',
-        Effect.fn(function* ({ params }) {
-          const monitor = yield* ensureMonitor(repository, params.monitorId)
-          const removedTarget = yield* targets.remove(monitor.id, params.mattermostUserId)
-          yield* Option.match(removedTarget, {
-            onNone: () => Effect.void,
-            onSome: (target) => events.publish({ _tag: 'NotificationTargetRemoved', monitor, target }),
-          })
-        }),
+      .handle('removeNotificationTarget', ({ params }) =>
+        directory.removeTarget(params.monitorId, params.mattermostUserId),
       )
   }),
 )
