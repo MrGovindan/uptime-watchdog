@@ -1,7 +1,7 @@
 import { BrowserSocket } from '@effect/platform-browser'
 import { WATCHDOG_RPC_PATH, WatchdogRpcs } from '@uptime-watchdog/common'
 import { Context, Layer } from 'effect'
-import { RpcClient, RpcSerialization } from 'effect/unstable/rpc'
+import { RpcClient, RpcSerialization } from 'effect/rpc'
 
 const makeWebSocketUrl = () => {
   const protocol = globalThis.location.protocol === 'https:' ? 'wss:' : 'ws:'

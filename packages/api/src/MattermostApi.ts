@@ -1,5 +1,5 @@
 import { Schema, SchemaGetter } from 'effect'
-import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from 'effect/unstable/httpapi'
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from 'effect/http-api'
 
 const MattermostErrorBody = Schema.Struct({
   message: Schema.optional(Schema.String),

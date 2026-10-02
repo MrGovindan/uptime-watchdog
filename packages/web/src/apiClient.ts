@@ -1,6 +1,6 @@
 import { Api } from '@uptime-watchdog/common'
 import { Context, Layer } from 'effect'
-import { HttpApiClient } from 'effect/unstable/httpapi'
+import { HttpApiClient } from 'effect/http-api'
 import { Http } from 'foldkit'
 
 export type MonitorApiClient = HttpApiClient.ForApi<typeof Api>

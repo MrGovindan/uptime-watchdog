@@ -2,7 +2,7 @@ import { Animation, Dialog, Toast as UiToast } from '@foldkit/ui'
 import { Option } from 'effect'
 import { Valid } from 'foldkit/fieldValidation'
 import { Command, given, message, model, story } from 'foldkit/story'
-import { evo } from 'foldkit/struct'
+import { modifyFields } from 'foldkit/struct'
 import { expect, test } from 'vitest'
 
 import { DeleteMonitor, ListMonitors, RegisterMonitor, UpdateMonitor } from './command'
@@ -114,8 +114,8 @@ test('submitting a valid form registers the monitor, closes, and resets', () => 
       [RegisterMonitor, Message.CompletedRegisterMonitor({ monitor })],
       [Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()],
       [UiToast.WaitBeforeDismissal, completedWaitBeforeDismissal],
-      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()],
-      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation()],
+      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint({ generation: 1 })],
+      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation({ generation: 1 })],
     ),
     Command.expectNone(),
     model((current) => {
@@ -155,8 +155,8 @@ test('submitting the edit form dispatches an update and replaces the monitor', (
       [UpdateMonitor, Message.CompletedUpdateMonitor({ monitor: updatedMonitor })],
       [Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()],
       [UiToast.WaitBeforeDismissal, completedWaitBeforeDismissal],
-      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()],
-      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation()],
+      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint({ generation: 1 })],
+      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation({ generation: 1 })],
     ),
     Command.expectNone(),
     model((current) => {
@@ -185,9 +185,9 @@ test('requesting delete opens a confirmation dialog naming the monitor', () => {
 })
 
 test('confirming delete dispatches the delete and removes the monitor', () => {
-  const confirming = evo(modelWithMonitors, {
+  const confirming = modifyFields(modelWithMonitors, {
     maybeDeleteMonitor: () => Option.some(monitor),
-    deleteDialog: () => Dialog.init({ id: 'delete-monitor-dialog', isOpen: true }),
+    deleteDialog: () => Dialog.boot({ id: 'delete-monitor-dialog' }).model,
   })
 
   story(
@@ -199,8 +199,8 @@ test('confirming delete dispatches the delete and removes the monitor', () => {
       [DeleteMonitor, Message.CompletedDeleteMonitor({ monitorId: monitor.id })],
       [Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()],
       [UiToast.WaitBeforeDismissal, completedWaitBeforeDismissal],
-      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()],
-      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation()],
+      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint({ generation: 1 })],
+      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation({ generation: 1 })],
     ),
     Command.expectNone(),
     model((current) => {
@@ -221,8 +221,8 @@ test('a completed register inserts the monitor and shows a success toast', () =>
     Command.expectHas(UiToast.WaitBeforeDismissal, Animation.WaitForPaint),
     Command.resolveAll(
       [UiToast.WaitBeforeDismissal, completedWaitBeforeDismissal],
-      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()],
-      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation()],
+      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint({ generation: 1 })],
+      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation({ generation: 1 })],
     ),
     model((current) => {
       expect(current.monitors._tag).toBe('Success')
@@ -243,8 +243,8 @@ test('a failed register shows an error toast', () => {
     Command.expectHas(UiToast.WaitBeforeDismissal, Animation.WaitForPaint),
     Command.resolveAll(
       [UiToast.WaitBeforeDismissal, completedWaitBeforeDismissal],
-      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()],
-      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation()],
+      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint({ generation: 1 })],
+      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation({ generation: 1 })],
     ),
     model((current) => {
       expect(current.toast.entries).toHaveLength(1)
@@ -281,7 +281,7 @@ test('removing a header drops only that row', () => {
 })
 
 test('duplicate header names are rejected on submit', () => {
-  const withDuplicateHeaders: Model = evo(modelWithOpenDialog, {
+  const withDuplicateHeaders: Model = modifyFields(modelWithOpenDialog, {
     form: (form) => ({
       ...form,
       headers: [
@@ -311,7 +311,7 @@ test('duplicate header names are rejected on submit', () => {
 })
 
 test('a monitor created before the list loads still lands in the list', () => {
-  const loadingModel = evo(makeInitialModel(), {
+  const loadingModel = modifyFields(makeInitialModel(), {
     monitors: () => MonitorsAsyncData.Loading(),
   })
 
@@ -321,8 +321,8 @@ test('a monitor created before the list loads still lands in the list', () => {
     message(Message.CompletedRegisterMonitor({ monitor })),
     Command.resolveAll(
       [UiToast.WaitBeforeDismissal, completedWaitBeforeDismissal],
-      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()],
-      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation()],
+      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint({ generation: 1 })],
+      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation({ generation: 1 })],
     ),
     model((current) => {
       expect(current.monitors._tag).toBe('Success')
@@ -334,7 +334,7 @@ test('a monitor created before the list loads still lands in the list', () => {
 })
 
 test('a registered event seeds a loading list', () => {
-  const loadingModel = evo(makeInitialModel(), {
+  const loadingModel = modifyFields(makeInitialModel(), {
     monitors: () => MonitorsAsyncData.Loading(),
   })
 
@@ -352,7 +352,7 @@ test('a registered event seeds a loading list', () => {
 })
 
 test('a registered event seeds a failed list', () => {
-  const failedModel = evo(makeInitialModel(), {
+  const failedModel = modifyFields(makeInitialModel(), {
     monitors: () => MonitorsAsyncData.Failure({ error: 'network down' }),
   })
 
@@ -397,7 +397,7 @@ test('an updated event replaces the monitor it carries', () => {
 })
 
 test('an updated event does not seed a loading list', () => {
-  const loadingModel = evo(makeInitialModel(), {
+  const loadingModel = modifyFields(makeInitialModel(), {
     monitors: () => MonitorsAsyncData.Loading(),
   })
 
@@ -457,8 +457,8 @@ test('a completed update preserves the health already on the monitor', () => {
     Command.expectHas(UiToast.WaitBeforeDismissal, Animation.WaitForPaint),
     Command.resolveAll(
       [UiToast.WaitBeforeDismissal, completedWaitBeforeDismissal],
-      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()],
-      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation()],
+      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint({ generation: 1 })],
+      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation({ generation: 1 })],
     ),
     model((current) => {
       if (current.monitors._tag === 'Success') {

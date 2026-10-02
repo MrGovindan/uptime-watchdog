@@ -1,8 +1,8 @@
 import { describe, expect, it } from '@effect/vitest'
 import { Duration, Effect, Fiber, Layer, Ref, Result } from 'effect'
 import { TestClock } from 'effect/testing'
-import { Headers, HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from 'effect/unstable/http'
-import { fromInput as headersFromInput } from 'effect/unstable/http/Headers'
+import { Headers, HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from 'effect/http'
+import { fromInput as headersFromInput } from 'effect/http/Headers'
 import { CheckUptime, layer as checkUptimeUseCaseLayer } from './CheckUptime.ts'
 
 type Handler = (

@@ -1,6 +1,6 @@
 import type { UptimeObservation, UptimeRequest } from '@uptime-watchdog/common'
 import { Context, DateTime, Effect, Layer, Option, pipe } from 'effect'
-import { HttpClient, HttpClientRequest } from 'effect/unstable/http'
+import { HttpClient, HttpClientRequest } from 'effect/http'
 
 export type Interface = (server: UptimeRequest) => Effect.Effect<UptimeObservation>
 

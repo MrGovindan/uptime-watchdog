@@ -1,7 +1,7 @@
 import { Api } from '@uptime-watchdog/common'
 import { Effect, Layer } from 'effect'
-import { HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/unstable/http'
-import { HttpApiClient } from 'effect/unstable/httpapi'
+import { HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/http'
+import { HttpApiClient } from 'effect/http-api'
 import { describe, expect, test } from 'vitest'
 
 import { ApiClient } from '../apiClient'

@@ -1,6 +1,6 @@
 import { BunHttpClient, BunHttpServer, BunRuntime } from '@effect/platform-bun'
 import { Effect, Layer, Stream } from 'effect'
-import { HttpClient, HttpClientRequest, HttpRouter, HttpStaticServer } from 'effect/unstable/http'
+import { HttpClient, HttpClientRequest, HttpRouter, HttpStaticServer } from 'effect/http'
 import * as CheckUptime from './CheckUptime'
 import * as AppConfig from './Config'
 import * as CronConversion from './CronConversion'

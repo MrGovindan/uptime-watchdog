@@ -6,7 +6,7 @@ import {
   NotificationTargetAlreadyExists,
 } from '@uptime-watchdog/common'
 import { Array, Context, Effect, Layer, Option, Schema } from 'effect'
-import { SqlClient, SqlError, SqlSchema } from 'effect/unstable/sql'
+import { SqlClient, SqlError, SqlSchema } from 'effect/sql'
 
 export interface Interface {
   readonly list: (monitorId: MonitorId) => Effect.Effect<ReadonlyArray<NotificationTarget>>

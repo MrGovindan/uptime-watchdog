@@ -1,6 +1,6 @@
 import { Monitor, type MonitorDefinition, MonitorId } from '@uptime-watchdog/common'
 import { Context, Effect, Layer, Option, Schema } from 'effect'
-import { SqlClient, SqlModel, SqlSchema } from 'effect/unstable/sql'
+import { SqlClient, SqlModel, SqlSchema } from 'effect/sql'
 
 export interface Interface {
   readonly register: (definition: MonitorDefinition) => Effect.Effect<Monitor>

@@ -2,7 +2,7 @@ import { type NotificationTarget } from '@uptime-watchdog/common'
 import { Dialog } from '@foldkit/ui'
 import { Array, Number, Option } from 'effect'
 import { AsyncData, Update } from 'foldkit'
-import { evo } from 'foldkit/struct'
+import { modifyFields } from 'foldkit/struct'
 
 import { ApiClient } from '../apiClient'
 import {
@@ -34,7 +34,7 @@ export const init = (): InitReturn => ({
 })
 
 const resetSession = (model: Model): Model =>
-  evo(model, {
+  modifyFields(model, {
     maybeMonitorId: () => Option.none(),
     maybeMonitorName: () => Option.none(),
     targets: () => TargetsAsyncData.Idle(),
@@ -45,7 +45,7 @@ const resetSession = (model: Model): Model =>
   })
 
 const readDialog = (model: Model) => Option.some(model.dialog)
-const writeDialog = (model: Model, nextDialog: Dialog.Model): Model => evo(model, { dialog: () => nextDialog })
+const writeDialog = (model: Model, nextDialog: Dialog.Model): Model => modifyFields(model, { dialog: () => nextDialog })
 const toDialogMessage = (message: Dialog.Message): Message => Message.GotDialogMessage({ message })
 
 const foldDialogOutMessage = Dialog.OutMessage.match<Update.Step<Model, Message>>({
@@ -91,7 +91,7 @@ export const open = (model: Model, input: OpenInput): UpdateReturn =>
   Update.combine(model, [
     foldDialogOpen,
     (stepModel) => ({
-      model: evo(stepModel, {
+      model: modifyFields(stepModel, {
         maybeMonitorId: () => Option.some(input.monitorId),
         maybeMonitorName: () => Option.some(input.monitorName),
         targets: () => TargetsAsyncData.Loading(),
@@ -113,7 +113,7 @@ export const update = (model: Model, message: Message) =>
 
       if (term.length < MIN_SEARCH_LENGTH) {
         return {
-          model: evo(model, {
+          model: modifyFields(model, {
             searchTerm: () => value,
             searchState: () => SearchState.Idle(),
           }),
@@ -123,7 +123,7 @@ export const update = (model: Model, message: Message) =>
       const nextVersion = Number.increment(model.searchVersion)
 
       return {
-        model: evo(model, {
+        model: modifyFields(model, {
           searchTerm: () => value,
           searchVersion: () => nextVersion,
           searchState: () => SearchState.Loading(),
@@ -137,7 +137,7 @@ export const update = (model: Model, message: Message) =>
         return { model }
       }
 
-      return { model: evo(model, { searchState: () => SearchState.Ok({ users }) }) }
+      return { model: modifyFields(model, { searchState: () => SearchState.Ok({ users }) }) }
     },
 
     FailedSearchMattermostUsers: ({ term, version, error }) => {
@@ -145,18 +145,18 @@ export const update = (model: Model, message: Message) =>
         return { model }
       }
 
-      return { model: evo(model, { searchState: () => SearchState.Failed({ error }) }) }
+      return { model: modifyFields(model, { searchState: () => SearchState.Failed({ error }) }) }
     },
 
     CompletedLoadNotificationTargets: ({ targets }) => ({
-      model: evo(model, {
+      model: modifyFields(model, {
         targets: () => TargetsAsyncData.Success({ data: targets }),
         maybeError: () => Option.none(),
       }),
     }),
 
     FailedLoadNotificationTargets: ({ error }) => ({
-      model: evo(model, {
+      model: modifyFields(model, {
         targets: () => TargetsAsyncData.Failure({ error }),
         maybeError: () => Option.none(),
       }),
@@ -168,7 +168,7 @@ export const update = (model: Model, message: Message) =>
       }
 
       return {
-        model: evo(model, { maybeError: () => Option.none() }),
+        model: modifyFields(model, { maybeError: () => Option.none() }),
         commands: [
           AddNotificationTarget({
             monitorId: model.maybeMonitorId.value,
@@ -179,7 +179,7 @@ export const update = (model: Model, message: Message) =>
     },
 
     CompletedAddNotificationTarget: ({ target }) => ({
-      model: evo(model, {
+      model: modifyFields(model, {
         targets: () => appendTarget(model.targets, target),
         searchState: () => SearchState.Idle(),
         searchTerm: () => '',
@@ -188,7 +188,7 @@ export const update = (model: Model, message: Message) =>
     }),
 
     FailedAddNotificationTarget: ({ error }) => ({
-      model: evo(model, { maybeError: () => Option.some(error) }),
+      model: modifyFields(model, { maybeError: () => Option.some(error) }),
     }),
 
     ClickedRemoveNotificationTarget: ({ mattermostUserId }) => {
@@ -197,7 +197,7 @@ export const update = (model: Model, message: Message) =>
       }
 
       return {
-        model: evo(model, { maybeError: () => Option.none() }),
+        model: modifyFields(model, { maybeError: () => Option.none() }),
         commands: [
           RemoveNotificationTarget({
             monitorId: model.maybeMonitorId.value,
@@ -208,15 +208,15 @@ export const update = (model: Model, message: Message) =>
     },
 
     CompletedRemoveNotificationTarget: ({ mattermostUserId }) => ({
-      model: evo(model, { targets: () => removeTarget(model.targets, mattermostUserId) }),
+      model: modifyFields(model, { targets: () => removeTarget(model.targets, mattermostUserId) }),
     }),
 
     FailedRemoveNotificationTarget: ({ error }) => ({
-      model: evo(model, { maybeError: () => Option.some(error) }),
+      model: modifyFields(model, { maybeError: () => Option.some(error) }),
     }),
 
     ClickedSendTest: ({ mattermostUserId }) => ({
-      model: evo(model, { maybeError: () => Option.none() }),
+      model: modifyFields(model, { maybeError: () => Option.none() }),
       commands: [
         SendTestNotification({
           monitorId: Option.getOrUndefined(model.maybeMonitorId),

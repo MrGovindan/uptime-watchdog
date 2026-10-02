@@ -1,7 +1,7 @@
 import { MattermostUnavailable, MattermostUserNotFound } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
 import { Effect, Exit, Layer, Redacted, Ref } from 'effect'
-import { type HttpClientRequest, HttpClient, HttpClientError, HttpClientResponse } from 'effect/unstable/http'
+import { type HttpClientRequest, HttpClient, HttpClientError, HttpClientResponse } from 'effect/http'
 import * as Mattermost from './Mattermost'
 
 const options = {

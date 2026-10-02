@@ -7,7 +7,7 @@ import {
   TokensExhausted,
 } from '@uptime-watchdog/common'
 import { Cause, Context, Effect, Layer, Schema } from 'effect'
-import { AiError, LanguageModel, Prompt } from 'effect/unstable/ai'
+import { AiError, LanguageModel, Prompt } from 'effect/ai'
 
 const SYSTEM_PROMPT =
   'You convert natural language schedule descriptions into cron expressions. ' +

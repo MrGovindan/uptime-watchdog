@@ -1,5 +1,5 @@
 import { Cron, DateTime, Effect, Result, Schema, SchemaGetter, SchemaIssue } from 'effect'
-import { HttpMethod as Hm, HttpClientError } from 'effect/unstable/http'
+import { HttpMethod as Hm, HttpClientError } from 'effect/http'
 
 export const NonEmptyTrimmedString = Schema.Trim.pipe(Schema.check(Schema.isNonEmpty()))
 

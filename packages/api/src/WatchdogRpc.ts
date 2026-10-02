@@ -1,6 +1,6 @@
 import { WATCHDOG_RPC_PATH, WatchdogRpcs } from '@uptime-watchdog/common'
 import { Effect, Layer } from 'effect'
-import { RpcSerialization, RpcServer } from 'effect/unstable/rpc'
+import { RpcSerialization, RpcServer } from 'effect/rpc'
 import { WatchdogEvents } from './WatchdogEvents'
 
 const handlers = WatchdogRpcs.toLayer(

@@ -1,6 +1,6 @@
 import { Api, type Monitor, type MonitorId, MonitorNotFound } from '@uptime-watchdog/common'
 import { Effect, Layer, Option } from 'effect'
-import { HttpApiBuilder } from 'effect/unstable/httpapi'
+import { HttpApiBuilder } from 'effect/http-api'
 import { Mattermost } from './Mattermost'
 import { MonitorRepository } from './MonitorRepository'
 import type { Interface as MonitorRepositoryInterface } from './MonitorRepository'

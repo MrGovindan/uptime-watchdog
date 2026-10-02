@@ -9,7 +9,7 @@ import {
 } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
 import { DateTime, Duration, Effect, Layer, Option, Queue, Schema } from 'effect'
-import { HttpApiTest } from 'effect/unstable/httpapi'
+import { HttpApiTest } from 'effect/http-api'
 import * as Database from './Database'
 import { Mattermost } from './Mattermost'
 import type { Interface as MattermostInterface } from './Mattermost'

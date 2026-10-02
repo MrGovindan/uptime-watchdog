@@ -1,7 +1,7 @@
 import { NotValidated } from 'foldkit/fieldValidation'
-import { expect, given, role, scene, submit, text } from 'foldkit/scene'
+import { expect, given, Mount, role, scene, submit, text } from 'foldkit/scene'
 import { Option } from 'effect'
-import { evo } from 'foldkit/struct'
+import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
 import {
@@ -18,6 +18,8 @@ import { Dialog } from '@foldkit/ui'
 import { makeInitialModel } from './model'
 import { update } from './update'
 import { view } from './view'
+
+const resolveDialogMount = Mount.resolve(Dialog.AcquireResources, Dialog.Message.SucceededAcquireResources())
 
 describe('view', () => {
   test('shows the empty state when there are no monitors', () => {
@@ -39,37 +41,38 @@ describe('view', () => {
   })
 
   test('shows a friendly description of the entered cron schedule', () => {
-    scene({ update, view }, given(modelReadyToCreate), expect(text('Every 5 minutes')).toExist())
+    scene({ update, view }, given(modelReadyToCreate), resolveDialogMount, expect(text('Every 5 minutes')).toExist())
   })
 
   test('counts the name characters after trimming', () => {
-    const model = evo(modelWithOpenDialog, {
-      form: (form) => evo(form, { name: () => NotValidated({ value: '  Prod API  ' }) }),
+    const model = modifyFields(modelWithOpenDialog, {
+      form: (form) => modifyFields(form, { name: () => NotValidated({ value: '  Prod API  ' }) }),
     })
 
-    scene({ update, view }, given(model), expect(text('8/128')).toExist())
+    scene({ update, view }, given(model), resolveDialogMount, expect(text('8/128')).toExist())
   })
 
   test('shows the over-limit count for a too-long name', () => {
-    const model = evo(modelWithOpenDialog, {
-      form: (form) => evo(form, { name: () => NotValidated({ value: 'x'.repeat(129) }) }),
+    const model = modifyFields(modelWithOpenDialog, {
+      form: (form) => modifyFields(form, { name: () => NotValidated({ value: 'x'.repeat(129) }) }),
     })
 
-    scene({ update, view }, given(model), expect(text('129/128')).toExist())
+    scene({ update, view }, given(model), resolveDialogMount, expect(text('129/128')).toExist())
   })
 
   test('shows an error when the entered cron schedule is not valid', () => {
-    const model = evo(modelWithOpenDialog, {
-      form: (form) => evo(form, { cronSchedule: () => NotValidated({ value: 'not a cron' }) }),
+    const model = modifyFields(modelWithOpenDialog, {
+      form: (form) => modifyFields(form, { cronSchedule: () => NotValidated({ value: 'not a cron' }) }),
     })
 
-    scene({ update, view }, given(model), expect(text('Enter a valid cron expression')).toExist())
+    scene({ update, view }, given(model), resolveDialogMount, expect(text('Enter a valid cron expression')).toExist())
   })
 
   test('submitting an empty form reveals validation errors and dispatches no command', () => {
     scene(
       { update, view },
       given(modelWithOpenDialog),
+      resolveDialogMount,
       submit(role('form')),
       expect(text('Name is required')).toExist(),
       expect(text('Hostname is required')).toExist(),
@@ -108,20 +111,22 @@ describe('view', () => {
     scene(
       { update, view },
       given(modelReadyToEdit),
+      resolveDialogMount,
       expect(text('Edit monitor')).toExist(),
       expect(text('Save changes')).toExist(),
     )
   })
 
   test('the delete confirmation dialog names the monitor', () => {
-    const confirming = evo(makeInitialModel(), {
+    const confirming = modifyFields(makeInitialModel(), {
       maybeDeleteMonitor: () => Option.some(monitor),
-      deleteDialog: () => Dialog.init({ id: 'delete-monitor-dialog', isOpen: true }),
+      deleteDialog: () => Dialog.boot({ id: 'delete-monitor-dialog' }).model,
     })
 
     scene(
       { update, view },
       given(confirming),
+      resolveDialogMount,
       expect(text('Delete monitor')).toExist(),
       expect(text('Delete Prod API? Its notification targets will also be removed.')).toExist(),
     )

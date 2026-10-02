@@ -8,7 +8,7 @@ import {
 import { Dialog } from '@foldkit/ui'
 import { DateTime, Duration, Option, Schema } from 'effect'
 import { Valid } from 'foldkit/fieldValidation'
-import { evo } from 'foldkit/struct'
+import { modifyFields } from 'foldkit/struct'
 
 import { MonitorsAsyncData, makeInitialModel } from './model'
 import { makeInitialForm } from './monitorForm'
@@ -49,27 +49,27 @@ export const pendingMonitor: MonitorWithHealth = { monitor, health: Option.none(
 export const healthyMonitor: MonitorWithHealth = { monitor, health: Option.some(healthy) }
 export const degradedMonitor: MonitorWithHealth = { monitor, health: Option.some(degraded) }
 
-export const modelWithEmptyList = evo(makeInitialModel(), {
+export const modelWithEmptyList = modifyFields(makeInitialModel(), {
   monitors: () => MonitorsAsyncData.Success({ data: [] }),
 })
 
-export const modelWithMonitors = evo(makeInitialModel(), {
+export const modelWithMonitors = modifyFields(makeInitialModel(), {
   monitors: () => MonitorsAsyncData.Success({ data: [pendingMonitor] }),
 })
 
-export const modelWithHealthyMonitor = evo(makeInitialModel(), {
+export const modelWithHealthyMonitor = modifyFields(makeInitialModel(), {
   monitors: () => MonitorsAsyncData.Success({ data: [healthyMonitor] }),
 })
 
-export const modelWithDegradedMonitor = evo(makeInitialModel(), {
+export const modelWithDegradedMonitor = modifyFields(makeInitialModel(), {
   monitors: () => MonitorsAsyncData.Success({ data: [degradedMonitor] }),
 })
 
-export const modelWithOpenDialog = evo(modelWithEmptyList, {
-  dialog: () => Dialog.init({ id: 'add-monitor-dialog', isOpen: true }),
+export const modelWithOpenDialog = modifyFields(modelWithEmptyList, {
+  dialog: () => Dialog.boot({ id: 'add-monitor-dialog' }).model,
 })
 
-export const modelReadyToCreate = evo(modelWithOpenDialog, {
+export const modelReadyToCreate = modifyFields(modelWithOpenDialog, {
   form: () => ({
     ...makeInitialForm(),
     name: Valid({ value: 'Prod API' }),
@@ -85,8 +85,8 @@ export const updatedMonitor = Schema.decodeSync(Monitor.json)({
   name: 'Renamed API',
 })
 
-export const modelReadyToEdit = evo(modelWithMonitors, {
-  dialog: () => Dialog.init({ id: 'add-monitor-dialog', isOpen: true }),
+export const modelReadyToEdit = modifyFields(modelWithMonitors, {
+  dialog: () => Dialog.boot({ id: 'add-monitor-dialog' }).model,
   editingMonitorId: () => Option.some(monitor.id),
   form: () => ({
     ...makeInitialForm(),

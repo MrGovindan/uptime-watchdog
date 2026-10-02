@@ -1,7 +1,7 @@
 import { SqliteClient } from '@effect/sql-sqlite-bun'
 import { describe, expect, it } from '@effect/vitest'
 import { Effect } from 'effect'
-import { SqlClient } from 'effect/unstable/sql'
+import { SqlClient } from 'effect/sql'
 import createMonitor from './202609131200_create_monitor'
 
 interface MonitorColumn {

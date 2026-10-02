@@ -1,6 +1,6 @@
 import { Api } from '@uptime-watchdog/common'
 import { Effect } from 'effect'
-import { HttpApiBuilder } from 'effect/unstable/httpapi'
+import { HttpApiBuilder } from 'effect/http-api'
 import { CronConversion } from './CronConversion'
 
 export const ScheduleGroupLive = HttpApiBuilder.group(Api, 'schedule', (handlers) =>

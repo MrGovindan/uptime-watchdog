@@ -1,5 +1,5 @@
 import { Result, Schema } from 'effect'
-import { HttpClientError } from 'effect/unstable/http'
+import { HttpClientError } from 'effect/http'
 import { ExpectedStatus, Monitor } from './Monitor'
 import { type UptimeObservation, UptimeResponse } from './Uptime'
 

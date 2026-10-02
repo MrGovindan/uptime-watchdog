@@ -6,8 +6,8 @@ import {
   MattermostUserNotFound,
 } from '@uptime-watchdog/common'
 import { Array, Context, Effect, Layer, type Redacted } from 'effect'
-import { HttpClient, HttpClientRequest } from 'effect/unstable/http'
-import { HttpApiClient } from 'effect/unstable/httpapi'
+import { HttpClient, HttpClientRequest } from 'effect/http'
+import { HttpApiClient } from 'effect/http-api'
 import * as MattermostApi from './MattermostApi'
 
 const SEARCH_LIMIT = 20

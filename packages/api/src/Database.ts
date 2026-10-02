@@ -1,7 +1,7 @@
 import { SqliteClient } from '@effect/sql-sqlite-bun'
 import * as SqliteMigrator from '@effect/sql-sqlite-bun/SqliteMigrator'
 import { Effect, Layer } from 'effect'
-import { SqlClient } from 'effect/unstable/sql'
+import { SqlClient } from 'effect/sql'
 import { migrationSet } from '../migrations'
 
 export const layer = (filename: string) => {

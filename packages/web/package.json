@@ -13,15 +13,15 @@
     "format": "oxfmt"
   },
   "dependencies": {
-    "@effect/platform-browser": "4.0.0-rc.115",
-    "@foldkit/ui": "0.160.0",
+    "@effect/platform-browser": "4.0.0",
+    "@foldkit/ui": "0.165.0",
     "@uptime-watchdog/common": "workspace:*",
-    "effect": "4.0.0-rc.115",
-    "foldkit": "0.160.0"
+    "effect": "4.0.0",
+    "foldkit": "0.165.0"
   },
   "devDependencies": {
-    "@foldkit/devtools": "0.160.0",
-    "@foldkit/vite-plugin": "0.22.0",
+    "@foldkit/devtools": "0.165.0",
+    "@foldkit/vite-plugin": "0.26.0",
     "@tailwindcss/vite": "^4.3.3",
     "happy-dom": "^20.11.13",
     "tailwindcss": "^4.3.3",

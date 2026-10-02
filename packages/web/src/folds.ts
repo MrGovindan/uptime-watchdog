@@ -2,7 +2,7 @@ import { Dialog } from '@foldkit/ui'
 import { Option } from 'effect'
 import { Update } from 'foldkit'
 import { NotValidated } from 'foldkit/fieldValidation'
-import { evo } from 'foldkit/struct'
+import { modifyFields } from 'foldkit/struct'
 
 import { ApiClient } from './apiClient'
 import * as CronHelp from './cronHelp'
@@ -18,11 +18,11 @@ type ToastMessage = typeof Toast.Message.Type
 // ADD MONITOR DIALOG
 
 const readDialog = (model: Model) => Option.some(model.dialog)
-const writeDialog = (model: Model, nextDialog: Dialog.Model): Model => evo(model, { dialog: () => nextDialog })
+const writeDialog = (model: Model, nextDialog: Dialog.Model): Model => modifyFields(model, { dialog: () => nextDialog })
 const toAddMonitorDialogMessage = (message: Dialog.Message): Message => Message.GotAddMonitorDialogMessage({ message })
 
 export const resetForm = (model: Model): Model =>
-  evo(model, { form: () => makeInitialForm(), editingMonitorId: () => Option.none() })
+  modifyFields(model, { form: () => makeInitialForm(), editingMonitorId: () => Option.none() })
 
 const foldAddMonitorDialogOutMessage = Dialog.OutMessage.match<Update.Step<Model, Message>>({
   Opened: () => (model) => ({ model }),
@@ -57,13 +57,13 @@ export const foldCloseAddMonitorDialog = Update.foldChildStep({
 
 const readDeleteDialog = (model: Model) => Option.some(model.deleteDialog)
 const writeDeleteDialog = (model: Model, nextDialog: Dialog.Model): Model =>
-  evo(model, { deleteDialog: () => nextDialog })
+  modifyFields(model, { deleteDialog: () => nextDialog })
 const toDeleteMonitorDialogMessage = (message: Dialog.Message): Message =>
   Message.GotDeleteMonitorDialogMessage({ message })
 
 const foldDeleteMonitorDialogOutMessage = Dialog.OutMessage.match<Update.Step<Model, Message>>({
   Opened: () => (model) => ({ model }),
-  Closed: () => (model) => ({ model: evo(model, { maybeDeleteMonitor: () => Option.none() }) }),
+  Closed: () => (model) => ({ model: modifyFields(model, { maybeDeleteMonitor: () => Option.none() }) }),
 })
 
 export const foldDeleteMonitorDialog = Update.foldChild({
@@ -94,12 +94,12 @@ export const foldCloseDeleteMonitorDialog = Update.foldChildStep({
 
 const readCronHelp = (model: Model) => Option.some(model.cronHelp)
 const writeCronHelp = (model: Model, nextCronHelp: CronHelp.Model): Model =>
-  evo(model, { cronHelp: () => nextCronHelp })
+  modifyFields(model, { cronHelp: () => nextCronHelp })
 const toCronHelpMessage = (message: CronHelp.Message): Message => Message.GotCronHelpMessage({ message })
 
 const readCronHelpDialog = (model: Model) => Option.some(model.cronHelp.dialog)
 const writeCronHelpDialog = (model: Model, nextDialog: Dialog.Model): Model =>
-  evo(model, { cronHelp: (cronHelp) => evo(cronHelp, { dialog: () => nextDialog }) })
+  modifyFields(model, { cronHelp: (cronHelp) => modifyFields(cronHelp, { dialog: () => nextDialog }) })
 
 const toCronHelpDialogMessage = (message: Dialog.Message): Message =>
   Message.GotCronHelpMessage({ message: CronHelp.Message.GotDialogMessage({ message }) })
@@ -107,7 +107,7 @@ const toCronHelpDialogMessage = (message: Dialog.Message): Message =>
 const foldCronHelpDialogOutMessage = Dialog.OutMessage.match<Update.Step<Model, Message>>({
   Opened: () => (model) => ({ model }),
   Closed: () => (model) => ({
-    model: evo(model, { cronHelp: CronHelp.resetToEntering }),
+    model: modifyFields(model, { cronHelp: CronHelp.resetToEntering }),
   }),
 })
 
@@ -128,7 +128,7 @@ export const openCronHelpDialog = (model: Model): Update.Return<Model, Message, 
       toParentMessage: toCronHelpDialogMessage,
       foldOutMessage: foldCronHelpDialogOutMessage,
     }),
-    (nextModel) => ({ model: evo(nextModel, { cronHelp: CronHelp.resetToEntering }) }),
+    (nextModel) => ({ model: modifyFields(nextModel, { cronHelp: CronHelp.resetToEntering }) }),
   ])
 
   return { model: opened.model, commands: opened.commands ?? [] }
@@ -141,8 +141,8 @@ const foldCronHelpOutMessage = CronHelp.OutMessage.match<Update.Step<Model, Mess
       const closed = foldCloseCronHelpDialog(stepModel)
 
       return {
-        model: evo(closed.model, {
-          form: (form) => evo(form, { cronSchedule: () => NotValidated({ value: cron }) }),
+        model: modifyFields(closed.model, {
+          form: (form) => modifyFields(form, { cronSchedule: () => NotValidated({ value: cron }) }),
         }),
         commands: closed.commands ?? [],
       }
@@ -160,7 +160,7 @@ export const foldCronHelp = Update.foldChild({
 // TOAST
 
 const readToast = (model: Model) => Option.some(model.toast)
-const writeToast = (model: Model, nextToast: ToastModel): Model => evo(model, { toast: () => nextToast })
+const writeToast = (model: Model, nextToast: ToastModel): Model => modifyFields(model, { toast: () => nextToast })
 const toToastMessage = (message: ToastMessage): Message => Message.GotToastMessage({ message })
 
 const foldToastOutMessage = Toast.OutMessage.match<Update.Step<Model, Message>>({
@@ -187,7 +187,7 @@ export const foldShowToast = Update.foldChild({
 
 const readNotificationTargets = (model: Model) => Option.some(model.notificationTargets)
 const writeNotificationTargets = (model: Model, nextNotificationTargets: NotificationTargets.Model): Model =>
-  evo(model, { notificationTargets: () => nextNotificationTargets })
+  modifyFields(model, { notificationTargets: () => nextNotificationTargets })
 const toNotificationTargetsMessage = (message: NotificationTargets.Message): Message =>
   Message.GotNotificationTargetsMessage({ message })
 
