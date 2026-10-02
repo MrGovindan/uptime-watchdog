@@ -1,11 +1,12 @@
 import { describe, expect, it } from '@effect/vitest'
 import { Cron, Effect, Schema } from 'effect'
 
-import { CronExpression, PORT_MAX, PORT_MIN, UptimeRequest } from './Uptime'
+import { CronExpression, PORT_MAX, PORT_MIN, PortFromString, UptimeRequest } from './Uptime'
 
 const decodeCron = Schema.decodeUnknownEffect(CronExpression)
 const encodeCron = Schema.encodeUnknownEffect(CronExpression)
 const decodeRequest = Schema.decodeUnknownEffect(UptimeRequest)
+const decodePortFromString = Schema.decodeUnknownEffect(PortFromString)
 
 const baseRequest = {
   hostname: 'example.test',
@@ -37,6 +38,26 @@ describe('CronExpression', () => {
       const error = yield* decodeCron('not a cron').pipe(Effect.flip)
 
       expect(error).toBeInstanceOf(Schema.SchemaError)
+    }),
+  )
+})
+
+describe('PortFromString', () => {
+  it.effect('parses a string within the TCP range into a port', () =>
+    Effect.gen(function* () {
+      expect(yield* decodePortFromString('8080')).toBe(8080)
+    }),
+  )
+
+  it.effect('rejects strings outside the range and non-numeric input', () =>
+    Effect.gen(function* () {
+      const invalid = ['0', String(PORT_MAX + 1), '80.5', 'abc', '']
+
+      for (const input of invalid) {
+        const error = yield* decodePortFromString(input).pipe(Effect.flip)
+
+        expect(error).toBeInstanceOf(Schema.SchemaError)
+      }
     }),
   )
 })

@@ -1,4 +1,5 @@
 import { describe, expect, it } from '@effect/vitest'
+import { Port } from '@uptime-watchdog/common'
 import { Duration, Effect, Fiber, Layer, Ref, Result } from 'effect'
 import { TestClock } from 'effect/testing'
 import { Headers, HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from 'effect/http'
@@ -36,7 +37,7 @@ const unreachable = (
 
 const request = {
   hostname: 'example.test',
-  port: 8080,
+  port: Port.make(8080),
   method: 'GET',
   protocol: 'https',
   headers: Headers.empty,

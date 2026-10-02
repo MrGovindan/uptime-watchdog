@@ -8,9 +8,9 @@ import {
   Monitor,
   MonitorName,
   type MonitorDefinition,
-  Port,
   PORT_MAX,
   PORT_MIN,
+  PortFromString,
   Protocol,
 } from '@uptime-watchdog/common'
 import { Array, Cron, Option, Result, Schema } from 'effect'
@@ -44,11 +44,9 @@ const nameRules = makeRules({
   rules: [Rule.fromSchema(MonitorName, `Name must be ${MONITOR_NAME_MAX_LENGTH} characters or fewer`)],
 })
 
-const PortValue = Schema.NumberFromString.pipe(Schema.decodeTo(Port))
-
 const portRules = makeRules({
   required: 'Port is required',
-  rules: [Rule.fromSchema(PortValue, `Port must be a whole number from ${PORT_MIN} to ${PORT_MAX}`)],
+  rules: [Rule.fromSchema(PortFromString, `Port must be a whole number from ${PORT_MIN} to ${PORT_MAX}`)],
 })
 
 const ExpectedStatusValue = Schema.NumberFromString.pipe(Schema.decodeTo(ExpectedStatus))
@@ -214,7 +212,7 @@ export const toMonitorDefinition = (form: Form): MonitorDefinition => {
     expectedStatus: Number(form.expectedStatus.value.trim()),
     request: {
       hostname: form.hostname.value.trim(),
-      port: Number(form.port.value),
+      port: Schema.decodeSync(PortFromString)(form.port.value),
       protocol: form.protocol,
       method: form.method,
       headers,

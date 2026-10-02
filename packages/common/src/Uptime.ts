@@ -15,8 +15,13 @@ export type Hostname = typeof Hostname.Type
 export const PORT_MIN = 1
 export const PORT_MAX = 65535
 
-export const Port = Schema.Int.pipe(Schema.check(Schema.isBetween({ minimum: PORT_MIN, maximum: PORT_MAX })))
+export const Port = Schema.brand('Port')(
+  Schema.Int.pipe(Schema.check(Schema.isBetween({ minimum: PORT_MIN, maximum: PORT_MAX }))),
+)
 export type Port = typeof Port.Type
+
+export const PortFromString = Schema.NumberFromString.pipe(Schema.decodeTo(Port))
+export type PortFromString = typeof PortFromString.Type
 
 const CronFromSelf = Schema.declare(Cron.isCron, {
   identifier: 'Cron',
