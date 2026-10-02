@@ -12,7 +12,10 @@ export type Protocol = typeof Protocol.Type
 export const Hostname = NonEmptyTrimmedString
 export type Hostname = typeof Hostname.Type
 
-export const Port = Schema.Int.pipe(Schema.check(Schema.isGreaterThan(0)))
+export const PORT_MIN = 1
+export const PORT_MAX = 65535
+
+export const Port = Schema.Int.pipe(Schema.check(Schema.isBetween({ minimum: PORT_MIN, maximum: PORT_MAX })))
 export type Port = typeof Port.Type
 
 const CronFromSelf = Schema.declare(Cron.isCron, {

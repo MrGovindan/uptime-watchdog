@@ -2,6 +2,7 @@ import {
   DescriptionNotConvertible,
   MattermostUnavailable,
   MonitorDefinition,
+  PORT_MAX,
   ProviderUnavailable,
   TokensExhausted,
 } from '@uptime-watchdog/common'
@@ -117,6 +118,24 @@ describe('monitor registration', () => {
 
         for (const body of bodies) {
           const response = yield* request(handler, '/monitor', json(body))
+
+          expect(response.status).toBe(400)
+        }
+      }),
+    ),
+  )
+
+  it.effect('rejects a port outside the TCP range with 400', () =>
+    withWebHandler(watchdogLayer(), (handler) =>
+      Effect.gen(function* () {
+        const ports = [0, -1, 80.5, PORT_MAX + 1]
+
+        for (const port of ports) {
+          const response = yield* request(
+            handler,
+            '/monitor',
+            json({ ...definitionJson, request: { ...definitionJson.request, port } }),
+          )
 
           expect(response.status).toBe(400)
         }

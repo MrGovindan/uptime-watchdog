@@ -1,5 +1,6 @@
 import { NotValidated } from 'foldkit/fieldValidation'
 import { expect, given, Mount, role, scene, submit, text } from 'foldkit/scene'
+import { PORT_MAX, PORT_MIN } from '@uptime-watchdog/common'
 import { Option } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
@@ -77,6 +78,20 @@ describe('view', () => {
       expect(text('Name is required')).toExist(),
       expect(text('Hostname is required')).toExist(),
       expect(text('Enter a valid cron expression')).toExist(),
+    )
+  })
+
+  test('rejects a port above the TCP range and reports the domain limit', () => {
+    const model = modifyFields(modelWithOpenDialog, {
+      form: (form) => modifyFields(form, { port: () => NotValidated({ value: String(PORT_MAX + 1) }) }),
+    })
+
+    scene(
+      { update, view },
+      given(model),
+      resolveDialogMount,
+      submit(role('form')),
+      expect(text(`Port must be a whole number from ${PORT_MIN} to ${PORT_MAX}`)).toExist(),
     )
   })
 

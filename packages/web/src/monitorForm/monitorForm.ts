@@ -2,10 +2,15 @@ import {
   CronExpression,
   EXPECTED_STATUS_MAX,
   EXPECTED_STATUS_MIN,
+  ExpectedStatus,
   HttpMethod,
+  MONITOR_NAME_MAX_LENGTH,
   Monitor,
   MonitorName,
   type MonitorDefinition,
+  Port,
+  PORT_MAX,
+  PORT_MIN,
   Protocol,
 } from '@uptime-watchdog/common'
 import { Array, Cron, Option, Result, Schema } from 'effect'
@@ -36,24 +41,17 @@ export const isMonitorNameTooLong = (value: string): boolean =>
 const nameRules = makeRules({
   required: 'Name is required',
   isEmpty: isBlank,
-  rules: [Rule.fromSchema(MonitorName, 'Name must be 128 characters or fewer')],
+  rules: [Rule.fromSchema(MonitorName, `Name must be ${MONITOR_NAME_MAX_LENGTH} characters or fewer`)],
 })
 
-const PortValue = Schema.NumberFromString.pipe(
-  Schema.check(Schema.isInt()),
-  Schema.check(Schema.isGreaterThan(0)),
-  Schema.check(Schema.isLessThanOrEqualTo(65535)),
-)
+const PortValue = Schema.NumberFromString.pipe(Schema.decodeTo(Port))
 
 const portRules = makeRules({
   required: 'Port is required',
-  rules: [Rule.fromSchema(PortValue, 'Port must be a whole number from 1 to 65535')],
+  rules: [Rule.fromSchema(PortValue, `Port must be a whole number from ${PORT_MIN} to ${PORT_MAX}`)],
 })
 
-const ExpectedStatusValue = Schema.NumberFromString.pipe(
-  Schema.check(Schema.isInt()),
-  Schema.check(Schema.isBetween({ minimum: EXPECTED_STATUS_MIN, maximum: EXPECTED_STATUS_MAX })),
-)
+const ExpectedStatusValue = Schema.NumberFromString.pipe(Schema.decodeTo(ExpectedStatus))
 
 const expectedStatusRules = makeRules({
   required: 'Expected status is required',

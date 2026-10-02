@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@effect/vitest'
 import { Cron, Effect, Schema } from 'effect'
 
-import { CronExpression, UptimeRequest } from './Uptime'
+import { CronExpression, PORT_MAX, PORT_MIN, UptimeRequest } from './Uptime'
 
 const decodeCron = Schema.decodeUnknownEffect(CronExpression)
 const encodeCron = Schema.encodeUnknownEffect(CronExpression)
@@ -86,6 +86,16 @@ describe('UptimeRequest', () => {
     }),
   )
 
+  it.effect('accepts a port at either end of the TCP range', () =>
+    Effect.gen(function* () {
+      const atMin = yield* decodeRequest({ ...baseRequest, port: PORT_MIN })
+      const atMax = yield* decodeRequest({ ...baseRequest, port: PORT_MAX })
+
+      expect(atMin.port).toBe(PORT_MIN)
+      expect(atMax.port).toBe(PORT_MAX)
+    }),
+  )
+
   it.effect('rejects values outside the schema', () =>
     Effect.gen(function* () {
       const invalid: ReadonlyArray<unknown> = [
@@ -93,6 +103,7 @@ describe('UptimeRequest', () => {
         { ...baseRequest, port: 0 },
         { ...baseRequest, port: -1 },
         { ...baseRequest, port: 80.5 },
+        { ...baseRequest, port: PORT_MAX + 1 },
         { ...baseRequest, protocol: 'ftp' },
         { ...baseRequest, method: 'NOPE' },
         { ...baseRequest, path: '   ' },
