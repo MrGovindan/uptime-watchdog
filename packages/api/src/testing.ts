@@ -1,16 +1,13 @@
-import type { MonitorObservation, MattermostUser, UptimeObservation } from '@uptime-watchdog/common'
-import { MattermostUserNotFound } from '@uptime-watchdog/common'
+import { Api, type MattermostUser, MattermostUserNotFound, type UptimeObservation } from '@uptime-watchdog/common'
 import { BunHttpServer } from '@effect/platform-bun'
-import { Cron, DateTime, Duration, Effect, Layer, Queue, Result, Stream } from 'effect'
+import { Cron, DateTime, Duration, Effect, Layer, Result } from 'effect'
+import { HttpClient, HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/http'
+import { HttpApiClient } from 'effect/http-api'
 
-import { CronConversion, type Interface as CronConversionInterface } from './CronConversion'
-import * as Database from './Database'
-import { Mattermost, type Interface as MattermostInterface } from './Mattermost'
-import { layer as monitorHealthLayer } from './MonitorHealth'
-import { layer as monitorRepositoryLayer } from './MonitorRepository'
-import * as MonitorStreams from './MonitorStreams'
-import { layer as notificationTargetRepositoryLayer } from './NotificationTargetRepository'
-import * as WatchdogEvents from './WatchdogEvents'
+import * as CheckUptime from './CheckUptime'
+import { type Interface as CronConversionInterface, CronConversion } from './CronConversion'
+import { type Interface as MattermostInterface, Mattermost } from './Mattermost'
+import * as Watchdog from './Watchdog'
 
 export const definitionJson = {
   name: 'Prod API',
@@ -25,7 +22,7 @@ export const definitionJson = {
   expectedStatus: 200,
 }
 
-export const dependencies = Layer.provideMerge(BunHttpServer.layerHttpServices)
+const platform = BunHttpServer.layerHttpServices
 
 export const cronConversionStub = (overrides: Partial<CronConversionInterface> = {}): Layer.Layer<CronConversion> => {
   const cron = Cron.parseUnsafe('*/5 * * * *', 'UTC')
@@ -65,34 +62,58 @@ export const mattermostStub = (overrides: Partial<MattermostInterface> = {}): La
   return Layer.succeed(Mattermost, { ...base, ...overrides })
 }
 
-export const shareDependencies = () => {
-  const database = Database.layer(':memory:')
-  const events = WatchdogEvents.layer
-  const observationQueue = Effect.runSync(Queue.unbounded<MonitorObservation>())
-  const streamsStub = Layer.succeed(MonitorStreams.MonitorStreams, {
-    start: () => Effect.void,
-    checkNow: (monitor) =>
-      Effect.gen(function* () {
-        const observation: UptimeObservation = {
-          time: DateTime.nowUnsafe(),
-          response: Result.succeed({ duration: Duration.millis(5), status: monitor.expectedStatus, body: 'pong' }),
-        }
-        yield* Queue.offer(observationQueue, { monitor, observation })
-        return observation
-      }),
-    observations: Stream.fromQueue(observationQueue),
-  })
-  const health = monitorHealthLayer.pipe(Layer.provide(streamsStub), Layer.provide(events))
+export const observation = (status = 200): UptimeObservation => ({
+  time: DateTime.nowUnsafe(),
+  response: Result.succeed({ duration: Duration.millis(5), status, body: 'pong' }),
+})
 
-  return {
-    events,
-    monitors: monitorRepositoryLayer.pipe(Layer.provide(database)),
-    targets: notificationTargetRepositoryLayer.pipe(Layer.provide(database)),
-    health,
-    streams: streamsStub,
-    observationQueue,
-  }
+export const checkUptimeStub = (observe?: CheckUptime.Interface): Layer.Layer<CheckUptime.CheckUptime> =>
+  Layer.succeed(CheckUptime.CheckUptime, observe ?? (() => Effect.succeed(observation())))
+
+export interface TestSeams {
+  readonly databasePath?: string
+  readonly staticRoot?: string
+  readonly checkUptime?: CheckUptime.Interface
+  readonly mattermost?: Partial<MattermostInterface>
+  readonly cronConversion?: Partial<CronConversionInterface>
 }
+
+export const watchdogLayer = (seams: TestSeams = {}) =>
+  Watchdog.layer({
+    databasePath: seams.databasePath ?? ':memory:',
+    staticRoot: seams.staticRoot ?? process.cwd(),
+  }).pipe(
+    Layer.provide(checkUptimeStub(seams.checkUptime)),
+    Layer.provide(mattermostStub(seams.mattermost)),
+    Layer.provide(cronConversionStub(seams.cronConversion)),
+    Layer.provide(platform),
+  )
+
+// Self-contained services for tests that inspect the graph directly. The
+// routes register against a throwaway router so the `HttpRouter` requirement
+// does not leak into the test.
+export const servicesLayer = (seams: TestSeams = {}) =>
+  watchdogLayer(seams).pipe(Layer.provide(Layer.fresh(HttpRouter.layer)))
+
+// A typed client over the same router production serves, so tests cross the
+// Watchdog seam instead of rebuilding the graph or reaching into its services.
+export const openClient = (layer: ReturnType<typeof watchdogLayer>) =>
+  Effect.gen(function* () {
+    const handler = yield* HttpRouter.toHttpEffect(layer)
+
+    const httpClient = HttpClient.make(
+      Effect.fnUntraced(function* (request) {
+        const serverRequest = HttpServerRequest.fromClientRequest(request)
+        const response = yield* handler.pipe(
+          Effect.provideService(HttpServerRequest.HttpServerRequest, serverRequest),
+          Effect.orDie,
+        )
+        return HttpServerResponse.toClientResponse(response, { request })
+      }, Effect.scoped),
+    )
+
+    return yield* HttpApiClient.makeWith(Api, { httpClient, baseUrl: 'http://localhost:3000' })
+  })
 
 export const waitFor = <A>(
   effect: Effect.Effect<A>,

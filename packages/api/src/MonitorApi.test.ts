@@ -1,67 +1,26 @@
 import {
-  Api,
   DescriptionNotConvertible,
   MattermostUnavailable,
-  Monitor,
   MonitorDefinition,
-  type MonitorObservation,
   ProviderUnavailable,
   TokensExhausted,
-  MonitorId,
 } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
-import { Cron, DateTime, Duration, Effect, Layer, Option, Queue, Ref, Result, Schema } from 'effect'
+import { Cron, Effect, Option, Ref, Schema } from 'effect'
 import { HttpRouter } from 'effect/http'
-import { HttpApiTest } from 'effect/http-api'
-import { type Interface as CronConversionInterface } from './CronConversion'
-import { type Interface as MattermostInterface } from './Mattermost'
-import * as MonitorApi from './MonitorApi'
-import { ScheduleGroupLive } from './ScheduleApi'
+import type { Interface as CheckUptimeInterface } from './CheckUptime'
 import {
   botUser,
-  cronConversionStub,
   definitionJson,
-  dependencies,
-  mattermostStub,
   mattermostUser,
-  shareDependencies,
+  observation,
+  openClient,
   waitFor,
+  watchdogLayer,
+  type TestSeams,
 } from './testing'
 
-const groupLayer = (overrides: Partial<MattermostInterface> = {}) => {
-  const { events, monitors, targets, health, streams } = shareDependencies()
-
-  return Layer.mergeAll(MonitorApi.MonitorGroupLive, MonitorApi.NotificationGroupLive, ScheduleGroupLive).pipe(
-    Layer.provide(events),
-    Layer.provide(monitors),
-    Layer.provide(targets),
-    Layer.provide(streams),
-    Layer.provide(mattermostStub(overrides)),
-    Layer.provide(cronConversionStub()),
-    Layer.provide(health),
-    dependencies,
-  )
-}
-
-const applicationLayer = (
-  overrides: Partial<MattermostInterface> = {},
-  cronOverrides: Partial<CronConversionInterface> = {},
-) => {
-  const { events, monitors, targets, health, streams } = shareDependencies()
-
-  return MonitorApi.layer.pipe(
-    Layer.provide(events),
-    Layer.provide(monitors),
-    Layer.provide(targets),
-    Layer.provide(streams),
-    Layer.provide(mattermostStub(overrides)),
-    Layer.provide(cronConversionStub(cronOverrides)),
-    Layer.provide(health),
-    dependencies,
-  )
-}
-
-const openClient = HttpApiTest.groups(Api, ['monitor', 'notification', 'schedule'])
+const client = (seams: TestSeams = {}) => openClient(watchdogLayer(seams))
 
 const definition = Effect.runSync(Schema.decodeUnknownEffect(MonitorDefinition)(definitionJson))
 
@@ -74,10 +33,8 @@ const json = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 })
 
-type ApplicationLayer = ReturnType<typeof applicationLayer>
-
 const withWebHandler = (
-  layer: ApplicationLayer,
+  layer: ReturnType<typeof watchdogLayer>,
   run: (handler: (request: Request) => Promise<Response>) => Effect.Effect<void>,
 ) =>
   Effect.acquireUseRelease(
@@ -86,9 +43,12 @@ const withWebHandler = (
     ({ dispose }) => Effect.promise(dispose),
   )
 
-const registerViaHttp = (handler: (request: Request) => Promise<Response>): Effect.Effect<string> =>
+const registerViaHttp = (
+  handler: (request: Request) => Promise<Response>,
+  body: unknown = definitionJson,
+): Effect.Effect<string> =>
   Effect.gen(function* () {
-    const response = yield* request(handler, '/monitor', json(definitionJson))
+    const response = yield* request(handler, '/monitor', json(body))
     expect(response.status).toBe(201)
 
     const created = (yield* Effect.promise(() => response.json())) as { id: string }
@@ -98,7 +58,7 @@ const registerViaHttp = (handler: (request: Request) => Promise<Response>): Effe
 describe('monitor registration', () => {
   it.effect('registers a monitor with a generated id and defaulted headers', () =>
     Effect.gen(function* () {
-      const { monitor } = yield* openClient
+      const { monitor } = yield* client()
 
       const created = yield* monitor.register({ payload: definition })
 
@@ -108,23 +68,23 @@ describe('monitor registration', () => {
       expect(created.request.headers).toEqual({})
       expect(Cron.isCron(created.cronSchedule)).toBe(true)
       expect(Cron.format(created.cronSchedule)).toBe('0-55/5 * * * *')
-    }).pipe(Effect.provide(groupLayer())),
+    }),
   )
 
   it.effect('lists registered monitors as pending before any observation', () =>
     Effect.gen(function* () {
-      const { monitor } = yield* openClient
+      const { monitor } = yield* client({ checkUptime: () => Effect.never })
 
       const created = yield* monitor.register({ payload: definition })
       const monitors = yield* monitor.list({})
 
       expect(Option.isNone(monitors[0]!.health)).toBe(true)
       expect(monitors[0]).toMatchObject({ monitor: created })
-    }).pipe(Effect.provide(groupLayer())),
+    }),
   )
 
   it.effect('rejects an invalid definition with 400', () =>
-    withWebHandler(applicationLayer(), (handler) =>
+    withWebHandler(watchdogLayer(), (handler) =>
       Effect.gen(function* () {
         const response = yield* request(
           handler,
@@ -141,7 +101,7 @@ describe('monitor registration', () => {
   )
 
   it.effect('rejects a definition with a missing or over-long name with 400', () =>
-    withWebHandler(applicationLayer(), (handler) =>
+    withWebHandler(watchdogLayer(), (handler) =>
       Effect.gen(function* () {
         const bodies = [
           {
@@ -175,7 +135,7 @@ describe('monitor update', () => {
 
   it.effect('replaces the definition, preserving the id and createdAt', () =>
     Effect.gen(function* () {
-      const { monitor } = yield* openClient
+      const { monitor } = yield* client({ checkUptime: () => Effect.never })
 
       const created = yield* monitor.register({ payload: definition })
       const updated = yield* monitor.updateMonitor({
@@ -191,11 +151,11 @@ describe('monitor update', () => {
       const monitors = yield* monitor.list({})
       expect(Option.isNone(monitors[0]!.health)).toBe(true)
       expect(monitors[0]).toMatchObject({ monitor: updated })
-    }).pipe(Effect.provide(groupLayer())),
+    }),
   )
 
   it.effect('rejects updating an unknown monitor with 404', () =>
-    withWebHandler(applicationLayer(), (handler) =>
+    withWebHandler(watchdogLayer(), (handler) =>
       Effect.gen(function* () {
         const response = yield* request(handler, '/monitor/00000000-0000-4000-8000-000000000000', {
           method: 'PUT',
@@ -209,7 +169,7 @@ describe('monitor update', () => {
   )
 
   it.effect('rejects an invalid update with 400', () =>
-    withWebHandler(applicationLayer(), (handler) =>
+    withWebHandler(watchdogLayer(), (handler) =>
       Effect.gen(function* () {
         const monitorId = yield* registerViaHttp(handler)
         const response = yield* request(handler, `/monitor/${monitorId}`, {
@@ -227,7 +187,7 @@ describe('monitor update', () => {
 describe('notification targets', () => {
   it.effect('adds a target, resolving the mattermost user on the server', () =>
     Effect.gen(function* () {
-      const { monitor } = yield* openClient
+      const { monitor } = yield* client()
 
       const created = yield* monitor.register({ payload: definition })
       const target = yield* monitor.addNotificationTarget({
@@ -241,12 +201,12 @@ describe('notification targets', () => {
         mattermostUsername: 'jesse',
         mattermostDisplayName: 'Jesse Duffield',
       })
-    }).pipe(Effect.provide(groupLayer())),
+    }),
   )
 
   it.effect('lists the targets of a monitor', () =>
     Effect.gen(function* () {
-      const { monitor } = yield* openClient
+      const { monitor } = yield* client()
 
       const created = yield* monitor.register({ payload: definition })
       const target = yield* monitor.addNotificationTarget({
@@ -257,12 +217,12 @@ describe('notification targets', () => {
       const targets = yield* monitor.listNotificationTargets({ params: { monitorId: created.id } })
 
       expect(targets).toEqual([target])
-    }).pipe(Effect.provide(groupLayer())),
+    }),
   )
 
   it.effect('removes a target idempotently', () =>
     Effect.gen(function* () {
-      const { monitor } = yield* openClient
+      const { monitor } = yield* client()
 
       const created = yield* monitor.register({ payload: definition })
       yield* monitor.addNotificationTarget({
@@ -280,11 +240,11 @@ describe('notification targets', () => {
       const targets = yield* monitor.listNotificationTargets({ params: { monitorId: created.id } })
 
       expect(targets).toEqual([])
-    }).pipe(Effect.provide(groupLayer())),
+    }),
   )
 
   it.effect('rejects a duplicate target with 409', () =>
-    withWebHandler(applicationLayer(), (handler) =>
+    withWebHandler(watchdogLayer(), (handler) =>
       Effect.gen(function* () {
         const monitorId = yield* registerViaHttp(handler)
         const body = { mattermostUserId: mattermostUser.id }
@@ -298,7 +258,7 @@ describe('notification targets', () => {
   )
 
   it.effect('rejects an unknown monitor with 404', () =>
-    withWebHandler(applicationLayer(), (handler) =>
+    withWebHandler(watchdogLayer(), (handler) =>
       Effect.gen(function* () {
         const unknown = '00000000-0000-4000-8000-000000000000'
 
@@ -317,8 +277,10 @@ describe('notification targets', () => {
 
   it.effect('reports 502 when mattermost rejects the request', () =>
     withWebHandler(
-      applicationLayer({
-        getUser: () => Effect.fail(new MattermostUnavailable({ message: 'down' })),
+      watchdogLayer({
+        mattermost: {
+          getUser: () => Effect.fail(new MattermostUnavailable({ message: 'down' })),
+        },
       }),
       (handler) =>
         Effect.gen(function* () {
@@ -335,7 +297,7 @@ describe('notification targets', () => {
   )
 
   it.effect('reports 404 when the mattermost user does not exist', () =>
-    withWebHandler(applicationLayer(), (handler) =>
+    withWebHandler(watchdogLayer(), (handler) =>
       Effect.gen(function* () {
         const monitorId = yield* registerViaHttp(handler)
         const response = yield* request(
@@ -352,7 +314,7 @@ describe('notification targets', () => {
 
 describe('monitor deletion', () => {
   it.effect('deletes a monitor and cascades its notification targets', () =>
-    withWebHandler(applicationLayer(), (handler) =>
+    withWebHandler(watchdogLayer(), (handler) =>
       Effect.gen(function* () {
         const monitorId = yield* registerViaHttp(handler)
         yield* request(
@@ -372,7 +334,7 @@ describe('monitor deletion', () => {
   )
 
   it.effect('rejects deleting an unknown monitor with 404', () =>
-    withWebHandler(applicationLayer(), (handler) =>
+    withWebHandler(watchdogLayer(), (handler) =>
       Effect.gen(function* () {
         const response = yield* request(handler, '/monitor/00000000-0000-4000-8000-000000000000', {
           method: 'DELETE',
@@ -387,16 +349,16 @@ describe('monitor deletion', () => {
 describe('mattermost notification endpoints', () => {
   it.effect('searches mattermost users', () =>
     Effect.gen(function* () {
-      const { notification } = yield* openClient
+      const { notification } = yield* client()
 
       const users = yield* notification.searchMattermostUsers({ payload: { term: 'jes' } })
 
       expect(users).toEqual([mattermostUser])
-    }).pipe(Effect.provide(groupLayer())),
+    }),
   )
 
   it.effect('rejects a blank search term with 400', () =>
-    withWebHandler(applicationLayer(), (handler) =>
+    withWebHandler(watchdogLayer(), (handler) =>
       Effect.gen(function* () {
         const response = yield* request(handler, '/notification/mattermost/user/search', json({ term: '   ' }))
 
@@ -409,7 +371,12 @@ describe('mattermost notification endpoints', () => {
     const sent = Effect.runSync(Ref.make<ReadonlyArray<Readonly<{ userId: string; message: string }>>>([]))
 
     return Effect.gen(function* () {
-      const { notification } = yield* openClient
+      const { notification } = yield* client({
+        mattermost: {
+          getUser: () => Effect.succeed(botUser),
+          sendDirectMessage: (userId, message) => Ref.update(sent, (entries) => [...entries, { userId, message }]),
+        },
+      })
 
       yield* notification.sendMattermostTest({
         payload: { mattermostUserId: botUser.id },
@@ -422,39 +389,31 @@ describe('mattermost notification endpoints', () => {
           message: 'This is a test notification from Uptime Watchdog.',
         },
       ])
-    }).pipe(
-      Effect.provide(
-        groupLayer({
-          getUser: () => Effect.succeed(botUser),
-          sendDirectMessage: (userId, message) => Ref.update(sent, (entries) => [...entries, { userId, message }]),
-        }),
-      ),
-    )
+    })
   })
 })
 
 describe('monitor health', () => {
-  const applicationLayerQueued = () => {
-    const deps = shareDependencies()
+  const statuses = () => Effect.runSync(Ref.make<Record<string, number>>({}))
 
-    return {
-      layer: MonitorApi.layer.pipe(
-        Layer.provide(deps.events),
-        Layer.provide(deps.monitors),
-        Layer.provide(deps.targets),
-        Layer.provide(deps.streams),
-        Layer.provide(mattermostStub()),
-        Layer.provide(cronConversionStub()),
-        Layer.provide(deps.health),
-        dependencies,
-      ),
-      observations: deps.observationQueue,
-    }
-  }
+  const scriptedCheckUptime =
+    (script: Ref.Ref<Record<string, number>>): CheckUptimeInterface =>
+    (request) =>
+      Effect.gen(function* () {
+        const current = yield* Ref.get(script)
+        const status = current[request.hostname]
+        if (status === undefined) {
+          return yield* Effect.never
+        }
+        return observation(status)
+      })
+
+  const setStatus = (script: Ref.Ref<Record<string, number>>, hostname: string, status: number) =>
+    Ref.update(script, (current) => ({ ...current, [hostname]: status }))
 
   type Listed = {
     monitor: { id: string }
-    health: { _tag: string; value?: { _tag?: string; reason?: unknown } }
+    health: { _tag: string; value?: { _tag?: string; reason?: unknown; response?: { status?: number } } }
   }
 
   const listMonitorsViaHttp = (handler: (req: Request) => Promise<Response>) =>
@@ -464,158 +423,146 @@ describe('monitor health', () => {
       return (yield* Effect.promise(() => response.json())) as Array<Listed>
     })
 
-  const observationFor = (
-    handler: (request: Request) => Promise<Response>,
-    monitorId: MonitorId,
-    status: number,
-  ): Effect.Effect<MonitorObservation> =>
-    listMonitorsViaHttp(handler).pipe(
-      Effect.flatMap((monitors) =>
-        Schema.decodeUnknownEffect(Monitor.json)(monitors.find((entry) => entry.monitor.id === monitorId)!.monitor),
-      ),
-      Effect.map((monitor) => ({
-        monitor,
-        observation: {
-          time: DateTime.nowUnsafe(),
-          response: Result.succeed({ duration: Duration.millis(5), status, body: 'pong' }),
-        },
-      })),
-      Effect.orDie,
+  const checkViaHttp = (handler: (req: Request) => Promise<Response>, monitorId: string) =>
+    Effect.gen(function* () {
+      const response = yield* request(handler, `/monitor/${monitorId}/check`, { method: 'POST' })
+      expect(response.status).toBe(200)
+    })
+
+  it.effect('reports health from the observation stream', () => {
+    const script = statuses()
+
+    return withWebHandler(watchdogLayer({ checkUptime: scriptedCheckUptime(script) }), (handler) =>
+      Effect.gen(function* () {
+        const monitorId = yield* registerViaHttp(handler)
+
+        const pending = yield* listMonitorsViaHttp(handler)
+        expect(pending).toHaveLength(1)
+        expect(pending[0]).toMatchObject({
+          monitor: { id: monitorId },
+          health: { _tag: 'None' },
+        })
+
+        yield* setStatus(script, 'example.test', 200)
+        yield* checkViaHttp(handler, monitorId)
+
+        const [observed] = yield* waitFor(
+          listMonitorsViaHttp(handler),
+          (monitors) => monitors.length === 1 && monitors[0]!.health._tag === 'Some',
+        )
+        expect(observed!.monitor.id).toBe(monitorId)
+        expect(observed!.health.value).toMatchObject({
+          _tag: 'Healthy',
+          response: { status: 200 },
+        })
+      }),
     )
+  })
 
-  it.effect('reports health from the observation stream', () =>
-    Effect.gen(function* () {
-      const { layer, observations } = applicationLayerQueued()
+  it.effect('keeps other monitors pending and drops deleted monitors', () => {
+    const script = statuses()
 
-      return yield* withWebHandler(layer, (handler) =>
-        Effect.gen(function* () {
-          const monitorId = yield* registerViaHttp(handler)
+    return withWebHandler(watchdogLayer({ checkUptime: scriptedCheckUptime(script) }), (handler) =>
+      Effect.gen(function* () {
+        const firstId = yield* registerViaHttp(handler, {
+          ...definitionJson,
+          request: { ...definitionJson.request, hostname: 'first.test' },
+        })
+        const secondId = yield* registerViaHttp(handler, {
+          ...definitionJson,
+          request: { ...definitionJson.request, hostname: 'second.test' },
+        })
 
-          const pending = yield* listMonitorsViaHttp(handler)
-          expect(pending).toHaveLength(1)
-          expect(pending[0]).toMatchObject({
-            monitor: { id: monitorId },
-            health: { _tag: 'None' },
-          })
+        yield* setStatus(script, 'first.test', 200)
+        yield* checkViaHttp(handler, firstId)
 
-          yield* Queue.offer(observations, yield* observationFor(handler, MonitorId.make(monitorId), 200))
+        const listed = yield* waitFor(listMonitorsViaHttp(handler), (monitors) =>
+          monitors.some((entry) => entry.monitor.id === firstId && entry.health._tag === 'Some'),
+        )
+        const firstMonitored = listed.find((entry) => entry.monitor.id === firstId)
+        const secondMonitored = listed.find((entry) => entry.monitor.id === secondId)
+        expect(firstMonitored).toMatchObject({
+          monitor: { id: firstId },
+          health: { _tag: 'Some', value: { _tag: 'Healthy' } },
+        })
+        expect(secondMonitored).toMatchObject({
+          monitor: { id: secondId },
+          health: { _tag: 'None' },
+        })
 
-          const [observed] = yield* waitFor(
-            listMonitorsViaHttp(handler),
-            (monitors) => monitors.length === 1 && monitors[0]!.health._tag === 'Some',
-          )
-          expect(observed!.monitor.id).toBe(monitorId)
-          expect(observed!.health.value).toMatchObject({
-            _tag: 'Healthy',
-            response: { status: 200 },
-          })
-        }),
-      )
-    }),
-  )
+        const deleted = yield* request(handler, `/monitor/${firstId}`, { method: 'DELETE' })
+        expect(deleted.status).toBe(204)
 
-  it.effect('keeps other monitors pending and drops deleted monitors', () =>
-    Effect.gen(function* () {
-      const { layer, observations } = applicationLayerQueued()
+        const after = yield* listMonitorsViaHttp(handler)
+        expect(after).toHaveLength(1)
+        expect(after[0]!.monitor.id).toBe(secondId)
+        expect(after[0]!.health._tag).toBe('None')
+      }),
+    )
+  })
 
-      return yield* withWebHandler(layer, (handler) =>
-        Effect.gen(function* () {
-          const firstId = yield* registerViaHttp(handler)
-          const secondId = yield* registerViaHttp(handler)
+  it.effect('transitions between healthy and degraded as observations change', () => {
+    const script = statuses()
 
-          yield* Queue.offer(observations, yield* observationFor(handler, MonitorId.make(firstId), 200))
+    return withWebHandler(watchdogLayer({ checkUptime: scriptedCheckUptime(script) }), (handler) =>
+      Effect.gen(function* () {
+        const monitorId = yield* registerViaHttp(handler)
 
-          const listed = yield* waitFor(listMonitorsViaHttp(handler), (monitors) =>
-            monitors.some((entry) => entry.monitor.id === firstId && entry.health._tag === 'Some'),
-          )
-          const firstMonitored = listed.find((entry) => entry.monitor.id === firstId)
-          const secondMonitored = listed.find((entry) => entry.monitor.id === secondId)
-          expect(firstMonitored).toMatchObject({
-            monitor: { id: firstId },
-            health: { _tag: 'Some', value: { _tag: 'Healthy' } },
-          })
-          expect(secondMonitored).toMatchObject({
-            monitor: { id: secondId },
-            health: { _tag: 'None' },
-          })
+        yield* setStatus(script, 'example.test', 200)
+        yield* checkViaHttp(handler, monitorId)
+        yield* waitFor(
+          listMonitorsViaHttp(handler),
+          (monitors) => monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Healthy',
+        )
 
-          const deleted = yield* request(handler, `/monitor/${firstId}`, { method: 'DELETE' })
-          expect(deleted.status).toBe(204)
+        yield* setStatus(script, 'example.test', 503)
+        yield* checkViaHttp(handler, monitorId)
+        yield* waitFor(
+          listMonitorsViaHttp(handler),
+          (monitors) => monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Degraded',
+        )
 
-          const after = yield* listMonitorsViaHttp(handler)
-          expect(after).toHaveLength(1)
-          expect(after[0]!.monitor.id).toBe(secondId)
-          expect(after[0]!.health._tag).toBe('None')
-        }),
-      )
-    }),
-  )
-
-  it.effect('transitions between healthy and degraded as observations change', () =>
-    Effect.gen(function* () {
-      const { layer, observations } = applicationLayerQueued()
-
-      return yield* withWebHandler(layer, (handler) =>
-        Effect.gen(function* () {
-          const monitorId = yield* registerViaHttp(handler)
-
-          yield* Queue.offer(observations, yield* observationFor(handler, MonitorId.make(monitorId), 200))
-          yield* waitFor(
-            listMonitorsViaHttp(handler),
-            (monitors) => monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Healthy',
-          )
-
-          yield* Queue.offer(observations, yield* observationFor(handler, MonitorId.make(monitorId), 503))
-          yield* waitFor(
-            listMonitorsViaHttp(handler),
-            (monitors) => monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Degraded',
-          )
-
-          yield* Queue.offer(observations, yield* observationFor(handler, MonitorId.make(monitorId), 200))
-          yield* waitFor(
-            listMonitorsViaHttp(handler),
-            (monitors) => monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Healthy',
-          )
-        }),
-      )
-    }),
-  )
+        yield* setStatus(script, 'example.test', 200)
+        yield* checkViaHttp(handler, monitorId)
+        yield* waitFor(
+          listMonitorsViaHttp(handler),
+          (monitors) => monitors[0]?.health._tag === 'Some' && monitors[0]!.health.value?._tag === 'Healthy',
+        )
+      }),
+    )
+  })
 
   it.effect('runs a check on demand and returns the resulting health', () =>
     Effect.gen(function* () {
-      const { monitor } = yield* openClient
+      const { monitor } = yield* client()
 
       const created = yield* monitor.register({ payload: definition })
 
       const health = yield* monitor.checkMonitor({ params: { monitorId: created.id } })
 
       expect(health).toMatchObject({ _tag: 'Healthy', response: { status: 200 } })
-    }).pipe(Effect.provide(groupLayer())),
-  )
-
-  it.effect('broadcasts an on-demand check to other clients', () =>
-    Effect.gen(function* () {
-      const { layer } = applicationLayerQueued()
-
-      return yield* withWebHandler(layer, (handler) =>
-        Effect.gen(function* () {
-          const monitorId = yield* registerViaHttp(handler)
-
-          const response = yield* request(handler, `/monitor/${monitorId}/check`, { method: 'POST' })
-          expect(response.status).toBe(200)
-
-          const [observed] = yield* waitFor(
-            listMonitorsViaHttp(handler),
-            (monitors) => monitors[0]?.health._tag === 'Some',
-          )
-          expect(observed!.health.value).toMatchObject({ _tag: 'Healthy', response: { status: 200 } })
-        }),
-      )
     }),
   )
 
+  it.effect('broadcasts an on-demand check to other clients', () =>
+    withWebHandler(watchdogLayer(), (handler) =>
+      Effect.gen(function* () {
+        const monitorId = yield* registerViaHttp(handler)
+
+        const response = yield* request(handler, `/monitor/${monitorId}/check`, { method: 'POST' })
+        expect(response.status).toBe(200)
+
+        const [observed] = yield* waitFor(
+          listMonitorsViaHttp(handler),
+          (monitors) => monitors[0]?.health._tag === 'Some',
+        )
+        expect(observed!.health.value).toMatchObject({ _tag: 'Healthy', response: { status: 200 } })
+      }),
+    ),
+  )
+
   it.effect('rejects checking an unknown monitor with 404', () =>
-    withWebHandler(applicationLayer(), (handler) =>
+    withWebHandler(watchdogLayer(), (handler) =>
       Effect.gen(function* () {
         const response = yield* request(handler, '/monitor/00000000-0000-4000-8000-000000000000/check', {
           method: 'POST',
@@ -630,30 +577,28 @@ describe('monitor health', () => {
 describe('mattermost extra notification endpoints', () => {
   it.effect('surfaces a mattermost user that does not exist', () =>
     Effect.gen(function* () {
-      const { notification } = yield* openClient
+      const { notification } = yield* client()
 
       const error = yield* notification
         .sendMattermostTest({ payload: { mattermostUserId: 'mm-missing' } })
         .pipe(Effect.flip)
 
       expect(error).toMatchObject({ _tag: 'MattermostUserNotFound' })
-    }).pipe(Effect.provide(groupLayer())),
+    }),
   )
 
   it.effect('surfaces mattermost being unavailable', () =>
     Effect.gen(function* () {
-      const { notification } = yield* openClient
+      const { notification } = yield* client({
+        mattermost: {
+          searchUsers: () => Effect.fail(new MattermostUnavailable({ message: 'down' })),
+        },
+      })
 
       const error = yield* notification.searchMattermostUsers({ payload: { term: 'jes' } }).pipe(Effect.flip)
 
       expect(error).toMatchObject({ _tag: 'MattermostUnavailable' })
-    }).pipe(
-      Effect.provide(
-        groupLayer({
-          searchUsers: () => Effect.fail(new MattermostUnavailable({ message: 'down' })),
-        }),
-      ),
-    ),
+    }),
   )
 })
 
@@ -662,22 +607,21 @@ describe('schedule conversion', () => {
 
   it.effect('converts a schedule description into a cron expression', () =>
     Effect.gen(function* () {
-      const { schedule } = yield* openClient
+      const { schedule } = yield* client()
 
       const { cron } = yield* schedule.convertDescription({ payload: { description } })
 
       expect(Cron.format(cron)).toBe('0-55/5 * * * *')
-    }).pipe(Effect.provide(groupLayer())),
+    }),
   )
 
   it.effect('reports 502 when the provider is unavailable', () =>
     withWebHandler(
-      applicationLayer(
-        {},
-        {
+      watchdogLayer({
+        cronConversion: {
           convert: () => Effect.fail(new ProviderUnavailable({ message: ' Gem: down' })),
         },
-      ),
+      }),
       (handler) =>
         Effect.gen(function* () {
           const response = yield* request(handler, '/cron', json({ description }))
@@ -689,12 +633,11 @@ describe('schedule conversion', () => {
 
   it.effect('reports 429 when the provider tokens are exhausted', () =>
     withWebHandler(
-      applicationLayer(
-        {},
-        {
+      watchdogLayer({
+        cronConversion: {
           convert: () => Effect.fail(new TokensExhausted()),
         },
-      ),
+      }),
       (handler) =>
         Effect.gen(function* () {
           const response = yield* request(handler, '/cron', json({ description }))
@@ -706,13 +649,12 @@ describe('schedule conversion', () => {
 
   it.effect('reports 422 when the description cannot be converted', () =>
     withWebHandler(
-      applicationLayer(
-        {},
-        {
+      watchdogLayer({
+        cronConversion: {
           convert: () =>
             Effect.fail(new DescriptionNotConvertible({ description: 'nope', message: 'not schedulable' })),
         },
-      ),
+      }),
       (handler) =>
         Effect.gen(function* () {
           const response = yield* request(handler, '/cron', json({ description }))
@@ -723,7 +665,7 @@ describe('schedule conversion', () => {
   )
 
   it.effect('rejects a blank description with 400', () =>
-    withWebHandler(applicationLayer(), (handler) =>
+    withWebHandler(watchdogLayer(), (handler) =>
       Effect.gen(function* () {
         const response = yield* request(handler, '/cron', json({ description: '   ' }))
 
@@ -733,7 +675,7 @@ describe('schedule conversion', () => {
   )
 
   it.effect('rejects an over-long description with 400', () =>
-    withWebHandler(applicationLayer(), (handler) =>
+    withWebHandler(watchdogLayer(), (handler) =>
       Effect.gen(function* () {
         const response = yield* request(handler, '/cron', json({ description: 'Every twenty-six seconds'.repeat(20) }))
 

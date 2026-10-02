@@ -1,31 +1,28 @@
 import { BunHttpServer } from '@effect/platform-bun'
-import { type MonitorObservation, Monitor, MonitorId, WatchdogEvent, WatchdogRpcs } from '@uptime-watchdog/common'
+import { type WatchdogEvent, WatchdogRpcs } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
-import { DateTime, Duration, Effect, Layer, Queue, Result, Schema, Scope, Stream } from 'effect'
+import { Effect, Layer, Queue, Ref, Scope, Stream } from 'effect'
 import { HttpRouter } from 'effect/http'
 import { RpcClient, RpcSerialization } from 'effect/rpc'
 import { Socket } from 'effect/socket'
 
-import * as MonitorApi from './MonitorApi'
-import { cronConversionStub, definitionJson, mattermostStub, shareDependencies } from './testing'
-import * as WatchdogRpc from './WatchdogRpc'
+import type { Interface as CheckUptimeInterface } from './CheckUptime'
+import { definitionJson, observation, watchdogLayer } from './testing'
 
 const updateJson = { ...definitionJson, name: 'Renamed API' }
 
-const withServer = (
-  run: (port: number, observationQueue: Queue.Queue<MonitorObservation>) => Effect.Effect<void, never, Scope.Scope>,
-) => {
+const withServer = (run: (port: number, status: Ref.Ref<number>) => Effect.Effect<void, never, Scope.Scope>) => {
   const port = 40000 + Math.floor(Math.random() * 20000)
-  const { observationQueue, events, monitors, targets, health, streams } = shareDependencies()
+  const status = Effect.runSync(Ref.make(200))
+  const checkUptime: CheckUptimeInterface = () => Ref.get(status).pipe(Effect.map(observation))
 
-  const server = HttpRouter.serve(Layer.mergeAll(MonitorApi.layer, WatchdogRpc.layer)).pipe(
-    Layer.provide(Layer.mergeAll(events, monitors, targets, health, streams, mattermostStub(), cronConversionStub())),
+  const server = HttpRouter.serve(watchdogLayer({ checkUptime })).pipe(
     Layer.provide(BunHttpServer.layer({ hostname: '127.0.0.1', port })),
   )
 
   // The client protocol is scoped to the test body, so close it before the
   // server layer shuts down; otherwise server.stop() waits on the open socket.
-  return Effect.scoped(run(port, observationQueue)).pipe(Effect.provide(server))
+  return Effect.scoped(run(port, status)).pipe(Effect.provide(server))
 }
 
 const request = (port: number, path: string, init?: RequestInit) =>
@@ -62,47 +59,32 @@ const deleteViaHttp = (port: number, monitorId: string) =>
     expect(response.status).toBe(204)
   })
 
-const listMonitorsViaHttp = (port: number) =>
+const checkViaHttp = (port: number, monitorId: string) =>
   Effect.gen(function* () {
-    const response = yield* request(port, '/monitor')
+    const response = yield* request(port, `/monitor/${monitorId}/check`, { method: 'POST' })
     expect(response.status).toBe(200)
-    return (yield* Effect.promise(() => response.json())) as Array<{
-      monitor: unknown
-      health: { _tag: string }
-    }>
   })
 
-const observationFor = (port: number, monitorId: MonitorId, status: number): Effect.Effect<MonitorObservation> =>
-  listMonitorsViaHttp(port).pipe(
-    Effect.flatMap((monitors) =>
-      Schema.decodeUnknownEffect(Monitor.json)(
-        monitors.find((entry) => (entry.monitor as { id: string }).id === monitorId)!.monitor,
-      ),
-    ),
-    // The events socket encodes `Monitor` in its persistence form, where `request`
-    // is a JSON string. Rebuild the monitor in that shape so it can be published.
-    Effect.flatMap((monitor) =>
-      Schema.encodeUnknownEffect(Monitor.json)(monitor).pipe(
-        Effect.flatMap((wire) =>
-          Schema.decodeUnknownEffect(Monitor)({ ...wire, request: JSON.stringify(wire.request) }),
-        ),
-      ),
-    ),
-    Effect.map((monitor) => ({
-      monitor,
-      observation: {
-        time: DateTime.nowUnsafe(),
-        response: Result.succeed({ duration: Duration.millis(5), status, body: 'pong' }),
-      },
-    })),
+const isHealthEvent = (event: WatchdogEvent): boolean =>
+  event._tag === 'MonitorHealthy' || event._tag === 'MonitorDegraded'
+
+// Registers a stream, so each lifecycle event is followed by an immediate
+// health snapshot; `nextEvent` filters to whichever events a test cares about.
+const nextEvent = (
+  received: Queue.Queue<WatchdogEvent>,
+  predicate: (event: WatchdogEvent) => boolean = () => true,
+): Effect.Effect<WatchdogEvent> =>
+  Queue.take(received).pipe(
+    Effect.flatMap((event) => (predicate(event) ? Effect.succeed(event) : nextEvent(received, predicate))),
+    Effect.timeout('5 seconds'),
     Effect.orDie,
   )
 
-// The RPC client protocol forks a background socket reader into the scope that
-// runs `makeProtocolSocket`, so the protocol must be constructed in the test's
-// own scope. Building it in a layer provided only around `RpcClient.make` closes
-// that scope when `make` returns, silently interrupting the reader before the
-// socket ever dials.
+const nextLifecycleEvent = (received: Queue.Queue<WatchdogEvent>) =>
+  nextEvent(received, (event) => !isHealthEvent(event))
+
+const nextHealthEvent = (received: Queue.Queue<WatchdogEvent>) => nextEvent(received, isHealthEvent)
+
 const connect = (port: number) =>
   Effect.gen(function* () {
     const socket = yield* Socket.makeWebSocket(`ws://127.0.0.1:${port}/rpc`).pipe(
@@ -132,9 +114,6 @@ const subscribe = (port: number) =>
     return received
   })
 
-const nextEvent = (received: Queue.Queue<WatchdogEvent>): Effect.Effect<WatchdogEvent> =>
-  Queue.take(received).pipe(Effect.timeout('5 seconds'), Effect.orDie)
-
 describe('watchdog events websocket', () => {
   it.live(
     'pushes monitor CRUD events to a connected client',
@@ -150,13 +129,13 @@ describe('watchdog events websocket', () => {
           })
 
           yield* updateViaHttp(port, monitorId)
-          expect(yield* nextEvent(received)).toMatchObject({
+          expect(yield* nextLifecycleEvent(received)).toMatchObject({
             _tag: 'MonitorUpdated',
             monitor: { id: monitorId, name: 'Renamed API' },
           })
 
           yield* deleteViaHttp(port, monitorId)
-          expect(yield* nextEvent(received)).toMatchObject({
+          expect(yield* nextLifecycleEvent(received)).toMatchObject({
             _tag: 'MonitorDeleted',
             monitor: { id: monitorId },
           })
@@ -168,22 +147,17 @@ describe('watchdog events websocket', () => {
   it.live(
     'pushes a health snapshot for each observation',
     () =>
-      withServer((port, observations) =>
+      withServer((port, status) =>
         Effect.gen(function* () {
           const received = yield* subscribe(port)
 
           const monitorId = yield* registerViaHttp(port)
           yield* nextEvent(received)
+          yield* nextHealthEvent(received)
 
-          yield* Queue.offer(observations, yield* observationFor(port, MonitorId.make(monitorId), 200))
-          expect(yield* nextEvent(received)).toMatchObject({
-            _tag: 'MonitorHealthy',
-            monitor: { id: monitorId },
-            health: { _tag: 'Healthy', response: { status: 200 } },
-          })
-
-          yield* Queue.offer(observations, yield* observationFor(port, MonitorId.make(monitorId), 503))
-          expect(yield* nextEvent(received)).toMatchObject({
+          yield* Ref.set(status, 503)
+          yield* checkViaHttp(port, monitorId)
+          expect(yield* nextHealthEvent(received)).toMatchObject({
             _tag: 'MonitorDegraded',
             monitor: { id: monitorId },
             health: {
@@ -192,8 +166,9 @@ describe('watchdog events websocket', () => {
             },
           })
 
-          yield* Queue.offer(observations, yield* observationFor(port, MonitorId.make(monitorId), 200))
-          expect(yield* nextEvent(received)).toMatchObject({
+          yield* Ref.set(status, 200)
+          yield* checkViaHttp(port, monitorId)
+          expect(yield* nextHealthEvent(received)).toMatchObject({
             _tag: 'MonitorHealthy',
             monitor: { id: monitorId },
             health: { _tag: 'Healthy', response: { status: 200 } },

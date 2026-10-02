@@ -1,11 +1,11 @@
-import type { MonitorObservation } from '@uptime-watchdog/common'
+import type { WatchdogEvent } from '@uptime-watchdog/common'
 import { Monitor } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
-import { DateTime, Duration, Effect, Layer, Option, Queue, Result, Schema, Stream } from 'effect'
+import { Effect, Option, Queue, Ref, Schema, Stream } from 'effect'
 import * as MonitorStreams from './MonitorStreams'
 import * as HealthService from './MonitorHealth'
+import { observation, servicesLayer } from './testing'
 import * as WatchdogEvents from './WatchdogEvents'
-import { type WatchdogEvent } from '@uptime-watchdog/common'
 
 const monitor = Effect.runSync(
   Schema.decodeUnknownEffect(Monitor.json)({
@@ -24,25 +24,11 @@ const monitor = Effect.runSync(
   }),
 )
 
-const observation = (status: number): MonitorObservation => ({
-  monitor,
-  observation: {
-    time: DateTime.nowUnsafe(),
-    response: Result.succeed({ duration: Duration.millis(5), status, body: 'pong' }),
-  },
-})
-
 const makeEnvironment = () => {
-  const observations = Effect.runSync(Queue.unbounded<MonitorObservation>())
-  const streamsStub = Layer.succeed(MonitorStreams.MonitorStreams, {
-    start: () => Effect.void,
-    checkNow: () => Effect.die('checkNow is not used by MonitorHealth'),
-    observations: Stream.fromQueue(observations),
-  })
-  const events = WatchdogEvents.layer
-  const layer = Layer.provideMerge(HealthService.layer.pipe(Layer.provide(streamsStub), Layer.provide(events)), events)
+  const status = Effect.runSync(Ref.make(200))
+  const checkUptime = () => Ref.get(status).pipe(Effect.map(observation))
 
-  return { observations, layer }
+  return { status, layer: servicesLayer({ checkUptime }) }
 }
 
 const subscribe = (events: WatchdogEvents.Interface) =>
@@ -77,25 +63,27 @@ describe('MonitorHealth', () => {
   it.effect('publishes a health snapshot for every observation', () => {
     const env = makeEnvironment()
     return Effect.gen(function* () {
+      const streams = yield* MonitorStreams.MonitorStreams
       const { delivered } = yield* withEvents
 
-      yield* Queue.offer(env.observations, observation(200))
+      yield* streams.checkNow(monitor)
       expect(yield* Queue.take(delivered)).toMatchObject({
         _tag: 'MonitorHealthy',
         monitor: { id: monitor.id },
         health: { _tag: 'Healthy', response: { status: 200 } },
       })
 
-      yield* Queue.offer(env.observations, observation(200))
+      yield* streams.checkNow(monitor)
       expect(yield* Queue.take(delivered)).toMatchObject({ _tag: 'MonitorHealthy' })
 
-      yield* Queue.offer(env.observations, observation(500))
+      yield* Ref.set(env.status, 500)
+      yield* streams.checkNow(monitor)
       expect(yield* Queue.take(delivered)).toMatchObject({
         _tag: 'MonitorDegraded',
         health: { _tag: 'Degraded', reason: { _tag: 'Unexpected', response: { status: 500 } } },
       })
 
-      yield* Queue.offer(env.observations, observation(500))
+      yield* streams.checkNow(monitor)
       expect(yield* Queue.take(delivered)).toMatchObject({ _tag: 'MonitorDegraded' })
     }).pipe(Effect.provide(env.layer))
   })
@@ -103,9 +91,11 @@ describe('MonitorHealth', () => {
   it.effect('reports degradation before the monitor has ever been healthy', () => {
     const env = makeEnvironment()
     return Effect.gen(function* () {
+      const streams = yield* MonitorStreams.MonitorStreams
       const { delivered } = yield* withEvents
 
-      yield* Queue.offer(env.observations, observation(503))
+      yield* Ref.set(env.status, 503)
+      yield* streams.checkNow(monitor)
       expect(yield* Queue.take(delivered)).toMatchObject({ _tag: 'MonitorDegraded' })
 
       expect(Option.isNone(yield* Queue.poll(delivered))).toBe(true)
@@ -115,13 +105,15 @@ describe('MonitorHealth', () => {
   it.effect('exposes the current health and forgets a deleted monitor', () => {
     const env = makeEnvironment()
     return Effect.gen(function* () {
+      const streams = yield* MonitorStreams.MonitorStreams
       const { events } = yield* withEvents
       const health = yield* HealthService.MonitorHealth
       const monitorId = monitor.id
 
       expect(Option.isNone(yield* health.getHealth(monitorId))).toBe(true)
 
-      yield* Queue.offer(env.observations, observation(500))
+      yield* Ref.set(env.status, 500)
+      yield* streams.checkNow(monitor)
       const degraded = Option.getOrThrow(yield* waitForSome(health.getHealth(monitorId), Option.isSome))
       expect(degraded._tag).toBe('Degraded')
 

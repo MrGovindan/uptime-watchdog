@@ -2,11 +2,10 @@ import { MonitorDefinition } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
 import { Context, Duration, Effect, Fiber, Layer, Option, Ref, Result, Schema, Stream } from 'effect'
 import { TestClock } from 'effect/testing'
-import { HttpClient, HttpClientResponse } from 'effect/http'
-import * as CheckUptime from './CheckUptime'
 import * as Database from './Database'
 import * as MonitorRepository from './MonitorRepository'
 import * as MonitorStreams from './MonitorStreams'
+import { observation, servicesLayer } from './testing'
 import * as WatchdogEvents from './WatchdogEvents'
 
 const definition = Effect.runSync(
@@ -39,30 +38,15 @@ const updatedDefinition = Effect.runSync(
   }),
 )
 
-const httpClient = Layer.succeed(
-  HttpClient.HttpClient,
-  HttpClient.make((request) =>
-    Effect.succeed(HttpClientResponse.fromWeb(request, new Response('pong', { status: 200 }))),
-  ),
-)
+const checkUptime = () => Effect.succeed(observation())
 
-const makeLayers = (seed: boolean) => {
-  const database = Database.layer(':memory:')
-  const events = WatchdogEvents.layer
-  const repository = MonitorRepository.layer.pipe(Layer.provide(database))
-  const seeded = seed
-    ? repository.pipe(
-        Layer.tap((context) => Context.get(context, MonitorRepository.MonitorRepository).register(definition)),
-      )
-    : repository
-  const streams = MonitorStreams.layer.pipe(
-    Layer.provide(events),
-    Layer.provide(seeded),
-    Layer.provide(CheckUptime.layer),
-    Layer.provide(httpClient),
+const layers = (databasePath = ':memory:') => servicesLayer({ databasePath, checkUptime })
+
+const seedMonitor = (databasePath: string) =>
+  MonitorRepository.layer.pipe(
+    Layer.provide(Database.layer(databasePath)),
+    Layer.tap((context) => Context.get(context, MonitorRepository.MonitorRepository).register(definition)),
   )
-  return Layer.mergeAll(streams, repository, events)
-}
 
 describe('MonitorStreams', () => {
   it.effect('starts a stream when a monitor is registered', () =>
@@ -83,7 +67,7 @@ describe('MonitorStreams', () => {
       expect(observed?.monitor.id).toBe(created.id)
       expect(observed?.monitor.name).toBe('Prod API')
       expect(Result.isSuccess(observed!.observation.response)).toBe(true)
-    }).pipe(Effect.provide(makeLayers(false))),
+    }).pipe(Effect.provide(layers())),
   )
 
   it.effect('runs an immediate check and publishes its observation', () =>
@@ -104,7 +88,7 @@ describe('MonitorStreams', () => {
       expect(observed?.monitor.id).toBe(created.id)
       expect(observed?.observation).toEqual(observation)
       expect(Result.isSuccess(observation.response)).toBe(true)
-    }).pipe(Effect.provide(makeLayers(false))),
+    }).pipe(Effect.provide(layers())),
   )
 
   it.effect('restarts the stream when a monitor is updated', () =>
@@ -130,29 +114,35 @@ describe('MonitorStreams', () => {
       expect(first?.monitor.id).toBe(created.id)
       expect(first?.monitor.name).toBe('Prod API')
       expect(second?.monitor.name).toBe('Renamed API')
-    }).pipe(Effect.provide(makeLayers(false))),
+    }).pipe(Effect.provide(layers())),
   )
 
-  it.effect('starts streams for monitors saved before startup', () =>
-    Effect.gen(function* () {
-      // Arrange
-      const streams = yield* MonitorStreams.MonitorStreams
-      const repository = yield* MonitorRepository.MonitorRepository
-      const [saved] = yield* repository.list
+  it.effect('starts streams for monitors saved before startup', () => {
+    const databasePath = `/tmp/opencode/watchdog-${crypto.randomUUID()}.db`
 
-      const collected = yield* streams.observations.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild)
-      yield* Effect.yieldNow
-      yield* TestClock.adjust(Duration.minutes(1))
-      yield* Effect.yieldNow
-      yield* TestClock.adjust(Duration.minutes(1))
+    return Effect.gen(function* () {
+      yield* Effect.scoped(Layer.build(seedMonitor(databasePath)))
 
-      // Assert
-      const [observed] = Array.from(yield* Fiber.join(collected))
-      expect(observed?.monitor.id).toBe(saved?.id)
-      expect(observed?.monitor.name).toBe('Prod API')
-      expect(Result.isSuccess(observed!.observation.response)).toBe(true)
-    }).pipe(Effect.provide(makeLayers(true))),
-  )
+      return yield* Effect.gen(function* () {
+        // Arrange
+        const streams = yield* MonitorStreams.MonitorStreams
+        const repository = yield* MonitorRepository.MonitorRepository
+        const [saved] = yield* repository.list
+
+        const collected = yield* streams.observations.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild)
+        yield* Effect.yieldNow
+        yield* TestClock.adjust(Duration.minutes(1))
+        yield* Effect.yieldNow
+        yield* TestClock.adjust(Duration.minutes(1))
+
+        // Assert
+        const [observed] = Array.from(yield* Fiber.join(collected))
+        expect(observed?.monitor.id).toBe(saved?.id)
+        expect(observed?.monitor.name).toBe('Prod API')
+        expect(Result.isSuccess(observed!.observation.response)).toBe(true)
+      }).pipe(Effect.provide(layers(databasePath)))
+    })
+  })
 
   it.effect('stops the stream when the monitor is deleted', () =>
     Effect.gen(function* () {
@@ -185,6 +175,6 @@ describe('MonitorStreams', () => {
 
       // Assert
       expect(yield* Ref.get(observed)).toBe(1)
-    }).pipe(Effect.provide(makeLayers(false))),
+    }).pipe(Effect.provide(layers())),
   )
 })
