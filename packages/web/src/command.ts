@@ -51,3 +51,14 @@ export const DeleteMonitor = Command.define('DeleteMonitor', {
       return Message.CompletedDeleteMonitor({ monitorId })
     }).pipe(Effect.catch((error) => Effect.succeed(Message.FailedDeleteMonitor({ error: describeError(error) })))),
 })
+
+export const CheckMonitor = Command.define('CheckMonitor', {
+  args: { monitorId: MonitorId },
+  messages: [Message.CompletedCheckMonitor, Message.FailedCheckMonitor],
+  execute: ({ monitorId }) =>
+    Effect.gen(function* () {
+      const client = yield* ApiClient
+      const health = yield* client.monitor.checkMonitor({ params: { monitorId } })
+      return Message.CompletedCheckMonitor({ monitorId, health })
+    }).pipe(Effect.catch((error) => Effect.succeed(Message.FailedCheckMonitor({ error: describeError(error) })))),
+})

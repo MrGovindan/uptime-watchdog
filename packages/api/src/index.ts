@@ -62,7 +62,7 @@ const application = Layer.unwrap(
     const status = MonitorHealth.layer.pipe(Layer.provide(streams), Layer.provide(events))
 
     const api = MonitorApi.layer.pipe(
-      Layer.provide(Layer.mergeAll(events, monitorRespository, targetRepository, mattermost, scheduleModel)),
+      Layer.provide(Layer.mergeAll(events, monitorRespository, targetRepository, mattermost, scheduleModel, streams)),
       Layer.provide(status),
     )
     const webApp = HttpStaticServer.layer({ root: staticRoot, spa: true })

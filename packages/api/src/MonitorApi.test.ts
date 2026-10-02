@@ -29,12 +29,13 @@ import {
 } from './testing'
 
 const groupLayer = (overrides: Partial<MattermostInterface> = {}) => {
-  const { events, monitors, targets, health } = shareDependencies()
+  const { events, monitors, targets, health, streams } = shareDependencies()
 
   return Layer.mergeAll(MonitorApi.MonitorGroupLive, MonitorApi.NotificationGroupLive, ScheduleGroupLive).pipe(
     Layer.provide(events),
     Layer.provide(monitors),
     Layer.provide(targets),
+    Layer.provide(streams),
     Layer.provide(mattermostStub(overrides)),
     Layer.provide(cronConversionStub()),
     Layer.provide(health),
@@ -46,12 +47,13 @@ const applicationLayer = (
   overrides: Partial<MattermostInterface> = {},
   cronOverrides: Partial<CronConversionInterface> = {},
 ) => {
-  const { events, monitors, targets, health } = shareDependencies()
+  const { events, monitors, targets, health, streams } = shareDependencies()
 
   return MonitorApi.layer.pipe(
     Layer.provide(events),
     Layer.provide(monitors),
     Layer.provide(targets),
+    Layer.provide(streams),
     Layer.provide(mattermostStub(overrides)),
     Layer.provide(cronConversionStub(cronOverrides)),
     Layer.provide(health),
@@ -440,6 +442,7 @@ describe('monitor health', () => {
         Layer.provide(deps.events),
         Layer.provide(deps.monitors),
         Layer.provide(deps.targets),
+        Layer.provide(deps.streams),
         Layer.provide(mattermostStub()),
         Layer.provide(cronConversionStub()),
         Layer.provide(deps.health),
@@ -576,6 +579,51 @@ describe('monitor health', () => {
         }),
       )
     }),
+  )
+
+  it.effect('runs a check on demand and returns the resulting health', () =>
+    Effect.gen(function* () {
+      const { monitor } = yield* openClient
+
+      const created = yield* monitor.register({ payload: definition })
+
+      const health = yield* monitor.checkMonitor({ params: { monitorId: created.id } })
+
+      expect(health).toMatchObject({ _tag: 'Healthy', response: { status: 200 } })
+    }).pipe(Effect.provide(groupLayer())),
+  )
+
+  it.effect('broadcasts an on-demand check to other clients', () =>
+    Effect.gen(function* () {
+      const { layer } = applicationLayerQueued()
+
+      return yield* withWebHandler(layer, (handler) =>
+        Effect.gen(function* () {
+          const monitorId = yield* registerViaHttp(handler)
+
+          const response = yield* request(handler, `/monitor/${monitorId}/check`, { method: 'POST' })
+          expect(response.status).toBe(200)
+
+          const [observed] = yield* waitFor(
+            listMonitorsViaHttp(handler),
+            (monitors) => monitors[0]?.health._tag === 'Some',
+          )
+          expect(observed!.health.value).toMatchObject({ _tag: 'Healthy', response: { status: 200 } })
+        }),
+      )
+    }),
+  )
+
+  it.effect('rejects checking an unknown monitor with 404', () =>
+    withWebHandler(applicationLayer(), (handler) =>
+      Effect.gen(function* () {
+        const response = yield* request(handler, '/monitor/00000000-0000-4000-8000-000000000000/check', {
+          method: 'POST',
+        })
+
+        expect(response.status).toBe(404)
+      }),
+    ),
   )
 })
 

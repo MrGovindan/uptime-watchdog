@@ -1,7 +1,7 @@
-import type { MonitorObservation, MattermostUser } from '@uptime-watchdog/common'
+import type { MonitorObservation, MattermostUser, UptimeObservation } from '@uptime-watchdog/common'
 import { MattermostUserNotFound } from '@uptime-watchdog/common'
 import { BunHttpServer } from '@effect/platform-bun'
-import { Cron, Effect, Layer, Queue, Stream } from 'effect'
+import { Cron, DateTime, Duration, Effect, Layer, Queue, Result, Stream } from 'effect'
 
 import { CronConversion, type Interface as CronConversionInterface } from './CronConversion'
 import * as Database from './Database'
@@ -71,6 +71,15 @@ export const shareDependencies = () => {
   const observationQueue = Effect.runSync(Queue.unbounded<MonitorObservation>())
   const streamsStub = Layer.succeed(MonitorStreams.MonitorStreams, {
     start: () => Effect.void,
+    checkNow: (monitor) =>
+      Effect.gen(function* () {
+        const observation: UptimeObservation = {
+          time: DateTime.nowUnsafe(),
+          response: Result.succeed({ duration: Duration.millis(5), status: monitor.expectedStatus, body: 'pong' }),
+        }
+        yield* Queue.offer(observationQueue, { monitor, observation })
+        return observation
+      }),
     observations: Stream.fromQueue(observationQueue),
   })
   const health = monitorHealthLayer.pipe(Layer.provide(streamsStub), Layer.provide(events))
@@ -80,6 +89,7 @@ export const shareDependencies = () => {
     monitors: monitorRepositoryLayer.pipe(Layer.provide(database)),
     targets: notificationTargetRepositoryLayer.pipe(Layer.provide(database)),
     health,
+    streams: streamsStub,
     observationQueue,
   }
 }

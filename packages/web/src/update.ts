@@ -5,7 +5,7 @@ import { NotValidated } from 'foldkit/fieldValidation'
 import { modifyFields } from 'foldkit/struct'
 
 import { ApiClient } from './apiClient'
-import { DeleteMonitor, ListMonitors, RegisterMonitor, UpdateMonitor } from './command'
+import { CheckMonitor, DeleteMonitor, ListMonitors, RegisterMonitor, UpdateMonitor } from './command'
 import {
   foldAddMonitorDialog,
   foldCloseAddMonitorDialog,
@@ -61,6 +61,18 @@ const updateMonitorHealth = (model: Model, monitor: Monitor, health: Option.Opti
 
   const data = Array.map(monitorEntries(model), (entry) =>
     entry.monitor.id === monitor.id ? { monitor, health } : entry,
+  )
+
+  return withMonitorData(model, data)
+}
+
+const setMonitorHealth = (model: Model, monitorId: MonitorId, health: Option.Option<MonitorHealth>): Model => {
+  if (!AsyncData.hasData(model.monitors)) {
+    return model
+  }
+
+  const data = Array.map(monitorEntries(model), (entry) =>
+    entry.monitor.id === monitorId ? { ...entry, health } : entry,
   )
 
   return withMonitorData(model, data)
@@ -261,6 +273,17 @@ export const update = (model: Model, message: Message) =>
       }),
 
     FailedUpdateMonitor: ({ error }) => foldShowToast(model, { variant: 'Error', payload: { message: error } }),
+
+    ClickedCheckMonitor: ({ monitorId }) => ({
+      model,
+      commands: [CheckMonitor({ monitorId })],
+    }),
+
+    CompletedCheckMonitor: ({ monitorId, health }) => ({
+      model: setMonitorHealth(model, monitorId, Option.some(health)),
+    }),
+
+    FailedCheckMonitor: ({ error }) => foldShowToast(model, { variant: 'Error', payload: { message: error } }),
 
     ClickedRequestDeleteMonitor: ({ monitor }) =>
       foldOpenDeleteMonitorDialog(modifyFields(model, { maybeDeleteMonitor: () => Option.some(monitor) })),

@@ -1,10 +1,11 @@
-import { Api, type Monitor, type MonitorId, MonitorNotFound } from '@uptime-watchdog/common'
+import { Api, type Monitor, type MonitorId, MonitorNotFound, toMonitorHealth } from '@uptime-watchdog/common'
 import { Effect, Layer, Option } from 'effect'
 import { HttpApiBuilder } from 'effect/http-api'
 import { Mattermost } from './Mattermost'
 import { MonitorRepository } from './MonitorRepository'
 import type { Interface as MonitorRepositoryInterface } from './MonitorRepository'
 import { MonitorHealth } from './MonitorHealth'
+import { MonitorStreams } from './MonitorStreams'
 import * as NotificationMessages from './NotificationMessages'
 import { NotificationTargetRepository } from './NotificationTargetRepository'
 import { ScheduleGroupLive } from './ScheduleApi'
@@ -30,6 +31,7 @@ export const MonitorGroupLive = HttpApiBuilder.group(Api, 'monitor', (handlers) 
     const mattermost = yield* Mattermost
     const events = yield* WatchdogEvents
     const health = yield* MonitorHealth
+    const streams = yield* MonitorStreams
 
     return handlers
       .handle(
@@ -69,6 +71,15 @@ export const MonitorGroupLive = HttpApiBuilder.group(Api, 'monitor', (handlers) 
           const notificationTargets = yield* targets.list(monitor.id)
           yield* repository.delete(monitor.id)
           yield* events.publish({ _tag: 'MonitorDeleted', monitor, targets: notificationTargets })
+        }),
+      )
+
+      .handle(
+        'checkMonitor',
+        Effect.fn(function* ({ params }) {
+          const monitor = yield* ensureMonitor(repository, params.monitorId)
+          const observation = yield* streams.checkNow(monitor)
+          return toMonitorHealth(observation, monitor.expectedStatus)
         }),
       )
 

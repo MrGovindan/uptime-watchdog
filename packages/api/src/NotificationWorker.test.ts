@@ -8,7 +8,7 @@ import {
   type MonitorId,
 } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
-import { DateTime, Duration, Effect, Layer, Option, Queue, Schema } from 'effect'
+import { DateTime, Duration, Effect, Layer, Option, Queue, Schema, Stream } from 'effect'
 import { HttpApiTest } from 'effect/http-api'
 import * as Database from './Database'
 import { Mattermost } from './Mattermost'
@@ -16,6 +16,7 @@ import type { Interface as MattermostInterface } from './Mattermost'
 import * as MonitorApi from './MonitorApi'
 import { layer as monitorRepositoryLayer } from './MonitorRepository'
 import { MonitorHealth } from './MonitorHealth'
+import * as MonitorStreams from './MonitorStreams'
 import * as NotificationMessages from './NotificationMessages'
 import { layer as notificationTargetRepositoryLayer } from './NotificationTargetRepository'
 import * as NotificationWorker from './NotificationWorker'
@@ -52,6 +53,12 @@ const MonitorHealthAbsent = Layer.succeed(MonitorHealth, {
   getHealth: () => Effect.succeed(Option.none()),
 })
 
+const MonitorStreamsAbsent = Layer.succeed(MonitorStreams.MonitorStreams, {
+  start: () => Effect.void,
+  checkNow: () => Effect.die('checkNow is not used by the notification worker'),
+  observations: Stream.empty,
+})
+
 const makeLayers = (overrides: Partial<MattermostInterface> = {}) => {
   const messages = Effect.runSync(Queue.unbounded<SentMessage>())
   const database = Database.layer(':memory:')
@@ -72,6 +79,7 @@ const makeLayers = (overrides: Partial<MattermostInterface> = {}) => {
     Layer.provide(events),
     Layer.provide(monitors),
     Layer.provide(targets),
+    Layer.provide(MonitorStreamsAbsent),
     Layer.provide(mattermost),
     Layer.provide(MonitorHealthAbsent),
     dependencies,

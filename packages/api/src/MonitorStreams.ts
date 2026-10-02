@@ -10,18 +10,21 @@ type RegistryValue = Readonly<{ monitor: Monitor; observation: UptimeObservation
 
 export interface Interface {
   readonly start: (monitor: Monitor) => Effect.Effect<void>
+  readonly checkNow: (monitor: Monitor) => Effect.Effect<UptimeObservation>
   readonly observations: Stream.Stream<MonitorObservation>
 }
 
 export class MonitorStreams extends Context.Service<MonitorStreams, Interface>()('MonitorStreams') {}
 
+const observe = (monitor: Monitor, checkUptime: CheckUptime.Interface) =>
+  checkUptime(monitor.request).pipe(
+    Effect.annotateSpans({ 'monitor.name': monitor.name, 'monitor.id': monitor.id }),
+    Effect.annotateLogs({ monitor: monitor.name }),
+  )
+
 const createMonitorStream = (monitor: Monitor, checkUptime: CheckUptime.Interface) =>
   Stream.fromEffectSchedule(
-    checkUptime(monitor.request).pipe(
-      Effect.annotateSpans({ 'monitor.name': monitor.name, 'monitor.id': monitor.id }),
-      Effect.annotateLogs({ monitor: monitor.name }),
-      Effect.map((observation) => ({ monitor, observation })),
-    ),
+    observe(monitor, checkUptime).pipe(Effect.map((observation) => ({ monitor, observation }))),
     Schedule.cron(monitor.cronSchedule),
   ).pipe(Stream.orDie)
 
@@ -34,6 +37,13 @@ const make = Effect.gen(function* () {
   const start = Effect.fn('MonitorStreams.start')((monitor: Monitor) =>
     registry.add(monitor.id, createMonitorStream(monitor, checkUptime)),
   )
+
+  const checkNow = Effect.fn('MonitorStreams.checkNow')(function* (monitor: Monitor) {
+    const observation = yield* observe(monitor, checkUptime)
+
+    yield* registry.emit(monitor.id, { monitor, observation })
+    return observation
+  })
 
   // Subscribe before loading so a monitor created during startup is not missed.
   yield* events.stream.pipe(
@@ -56,6 +66,7 @@ const make = Effect.gen(function* () {
 
   return {
     start,
+    checkNow,
     observations: registry.stream.pipe(Stream.map(([, value]) => value)),
   } satisfies Interface
 })

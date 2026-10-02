@@ -1,6 +1,7 @@
 import {
   HttpMethod,
   Monitor,
+  MonitorHealth,
   MonitorId,
   MonitorName,
   MonitorWithHealth,
@@ -44,6 +45,10 @@ export const Message = defineMessageUnion({
   ClickedUpdateMonitor: {},
   CompletedUpdateMonitor: { monitor: Monitor },
   FailedUpdateMonitor: { error: Schema.String },
+
+  ClickedCheckMonitor: { monitorId: MonitorId },
+  CompletedCheckMonitor: { monitorId: MonitorId, health: MonitorHealth },
+  FailedCheckMonitor: { error: Schema.String },
 
   ClickedRequestDeleteMonitor: { monitor: Monitor },
   ClickedCancelDeleteMonitor: {},

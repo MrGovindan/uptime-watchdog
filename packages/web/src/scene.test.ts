@@ -107,6 +107,10 @@ describe('view', () => {
     scene({ update, view }, given(modelWithMonitors), expect(text('Edit')).toExist(), expect(text('Delete')).toExist())
   })
 
+  test('offers a check now action for each monitor', () => {
+    scene({ update, view }, given(modelWithMonitors), expect(text('Check now')).toExist())
+  })
+
   test('titles the dialog and submit button for editing', () => {
     scene(
       { update, view },

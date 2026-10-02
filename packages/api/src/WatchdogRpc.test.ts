@@ -16,10 +16,10 @@ const withServer = (
   run: (port: number, observationQueue: Queue.Queue<MonitorObservation>) => Effect.Effect<void, never, Scope.Scope>,
 ) => {
   const port = 40000 + Math.floor(Math.random() * 20000)
-  const { observationQueue, events, monitors, targets, health } = shareDependencies()
+  const { observationQueue, events, monitors, targets, health, streams } = shareDependencies()
 
   const server = HttpRouter.serve(Layer.mergeAll(MonitorApi.layer, WatchdogRpc.layer)).pipe(
-    Layer.provide(Layer.mergeAll(events, monitors, targets, health, mattermostStub(), cronConversionStub())),
+    Layer.provide(Layer.mergeAll(events, monitors, targets, health, streams, mattermostStub(), cronConversionStub())),
     Layer.provide(BunHttpServer.layer({ hostname: '127.0.0.1', port })),
   )
 

@@ -86,6 +86,27 @@ describe('MonitorStreams', () => {
     }).pipe(Effect.provide(makeLayers(false))),
   )
 
+  it.effect('runs an immediate check and publishes its observation', () =>
+    Effect.gen(function* () {
+      // Arrange
+      const streams = yield* MonitorStreams.MonitorStreams
+      const repository = yield* MonitorRepository.MonitorRepository
+      const collected = yield* streams.observations.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild)
+      yield* Effect.yieldNow
+
+      const created = yield* repository.register(definition)
+
+      // Act
+      const observation = yield* streams.checkNow(created)
+
+      // Assert
+      const [observed] = Array.from(yield* Fiber.join(collected))
+      expect(observed?.monitor.id).toBe(created.id)
+      expect(observed?.observation).toEqual(observation)
+      expect(Result.isSuccess(observation.response)).toBe(true)
+    }).pipe(Effect.provide(makeLayers(false))),
+  )
+
   it.effect('restarts the stream when a monitor is updated', () =>
     Effect.gen(function* () {
       // Arrange

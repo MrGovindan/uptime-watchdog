@@ -1,11 +1,12 @@
 import { Animation, Dialog, Toast as UiToast } from '@foldkit/ui'
-import { Option } from 'effect'
+import { type MonitorHealth } from '@uptime-watchdog/common'
+import { DateTime, Duration, Option } from 'effect'
 import { Valid } from 'foldkit/fieldValidation'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { expect, test } from 'vitest'
 
-import { DeleteMonitor, ListMonitors, RegisterMonitor, UpdateMonitor } from './command'
+import { CheckMonitor, DeleteMonitor, ListMonitors, RegisterMonitor, UpdateMonitor } from './command'
 import { makeInitialModel, MonitorsAsyncData, type Model } from './model'
 import { update } from './update'
 import { Message } from './message'
@@ -465,6 +466,49 @@ test('a completed update preserves the health already on the monitor', () => {
         expect(current.monitors.data[0]?.monitor.name).toBe('Renamed API')
         expect(current.monitors.data[0]?.health._tag).toBe('Some')
       }
+    }),
+  )
+})
+
+test('clicking check now runs an on-demand check and sets the health', () => {
+  const health: MonitorHealth = {
+    _tag: 'Healthy',
+    time: DateTime.nowUnsafe(),
+    response: { duration: Duration.millis(5), status: 200, body: 'pong' },
+  }
+
+  story(
+    update,
+    given(modelWithMonitors),
+    message(Message.ClickedCheckMonitor({ monitorId: monitor.id })),
+    Command.expectHas(CheckMonitor),
+    Command.resolve(CheckMonitor, Message.CompletedCheckMonitor({ monitorId: monitor.id, health })),
+    model((current) => {
+      if (current.monitors._tag === 'Success') {
+        expect(current.monitors.data[0]?.health._tag).toBe('Some')
+        const currentHealth = current.monitors.data[0]?.health
+        if (currentHealth?._tag === 'Some') {
+          expect(currentHealth.value._tag).toBe('Healthy')
+        }
+      }
+    }),
+  )
+})
+
+test('a failed check shows an error toast', () => {
+  story(
+    update,
+    given(modelWithMonitors),
+    message(Message.FailedCheckMonitor({ error: 'network down' })),
+    Command.expectHas(UiToast.WaitBeforeDismissal, Animation.WaitForPaint),
+    Command.resolveAll(
+      [UiToast.WaitBeforeDismissal, completedWaitBeforeDismissal],
+      [Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint({ generation: 1 })],
+      [Animation.WaitForAnimationSettled, Animation.Message.EndedAnimation({ generation: 1 })],
+    ),
+    model((current) => {
+      expect(current.toast.entries).toHaveLength(1)
+      expect(current.toast.entries[0]?.variant).toBe('Error')
     }),
   )
 })

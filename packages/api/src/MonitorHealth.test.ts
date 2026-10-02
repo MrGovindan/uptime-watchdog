@@ -36,6 +36,7 @@ const makeEnvironment = () => {
   const observations = Effect.runSync(Queue.unbounded<MonitorObservation>())
   const streamsStub = Layer.succeed(MonitorStreams.MonitorStreams, {
     start: () => Effect.void,
+    checkNow: () => Effect.die('checkNow is not used by MonitorHealth'),
     observations: Stream.fromQueue(observations),
   })
   const events = WatchdogEvents.layer

@@ -28,6 +28,22 @@ describe('StreamRegistry', () => {
     }).pipe(Effect.provide(layer<string, number>())),
   )
 
+  it.effect('emits a value for a key into the merged stream', () =>
+    Effect.gen(function* () {
+      // Arrange
+      const registry = yield* Registry
+      const collected = yield* registry.stream.pipe(Stream.take(1), Stream.runCollect, Effect.forkChild)
+      yield* Effect.yieldNow
+
+      // Act
+      yield* registry.emit('a', 42)
+
+      // Assert
+      const values = yield* Fiber.join(collected)
+      expect(Array.from(values)).toEqual([['a', 42]])
+    }).pipe(Effect.provide(layer<string, number>())),
+  )
+
   it.effect('replacing a key interrupts the previous stream', () =>
     Effect.gen(function* () {
       // Arrange

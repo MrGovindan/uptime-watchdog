@@ -211,6 +211,7 @@ const monitorRow = (entry: MonitorWithHealth, h: HtmlBuilder<Message>): Html => 
       h.div(
         [h.Class('mt-3 flex flex-wrap gap-2')],
         [
+          secondaryButton(Message.ClickedCheckMonitor({ monitorId: monitor.id }), 'Check now', h),
           secondaryButton(
             Message.ClickedOpenNotificationTargets({
               monitorId: monitor.id,
