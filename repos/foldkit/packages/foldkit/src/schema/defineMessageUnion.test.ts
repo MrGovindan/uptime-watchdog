@@ -93,6 +93,26 @@ describe('defineMessageUnion', () => {
     expect(describeMessage(Message.ChangedCount({ count: 4 }))).toBe('count 4')
   })
 
+  it('infers a union from every handler return', () => {
+    const Result = defineMessageUnion({
+      Reset: {},
+      Count: { count: Schema.Number },
+    })
+    type Result = typeof Result.Type
+
+    const toResult = (message: Message) =>
+      Message.match(message, {
+        ClickedReset: () => Result.Reset(),
+        ChangedCount: ({ count }) => Result.Count({ count }),
+        SelectedItem: () => Result.Reset(),
+      })
+
+    expectTypeOf(toResult).toEqualTypeOf<(message: Message) => Result>()
+    expect(toResult(Message.ChangedCount({ count: 4 }))).toStrictEqual(
+      Result.Count({ count: 4 }),
+    )
+  })
+
   it('preserves refined input types in exhaustive tag matching', () => {
     expectTypeOf<
       Parameters<typeof Message.match>['length']

@@ -78,7 +78,7 @@ The [websocket-chat example](/example-apps/websocket-chat) shows a more involved
 
 `Subscription.animationFrame` is a ready-made entry for work tied to the browser's paint clock. It emits a Message on each `requestAnimationFrame` tick while its `isActive` function returns `true`, and supplies the inter-frame delta in milliseconds.
 
-The helper returns a complete entry with `{ isActive: boolean }` dependencies. Place it directly in the record passed to `Subscription.make`:
+The helper returns a complete entry with `{ isActive: boolean }` dependencies. Its `toMessage` maps frame deltas to the entry's Message type; unlike the free-standing event Streams below, it is already an entry shape. Place it directly in the record passed to `Subscription.make`:
 
 ::Snippet{name="subscriptionAnimationFrame" label="animation frame example"}
 
@@ -88,17 +88,57 @@ Use `Stream.tick` for discrete wall-clock steps that should occur every N millis
 
 ## DOM Events
 
-`Subscription.fromEvent` handles DOM events that are not tied to one element in the rendered tree, such as window shortcuts, media-query changes, or document visibility. It registers the listener when the Stream scope opens and removes it when the scope closes.
+`Subscription.fromEvent` handles DOM events that are not tied to one element in the rendered tree, such as window shortcuts or document visibility. It adds the listener when the Stream starts and removes it when the Stream stops. For a media query, use `Subscription.fromMediaQuery` from the [Media Queries](#media-queries) section. That helper also emits the query's current value.
 
-The helper returns a Stream, not a complete entry. Wrap it in `Stream.when` inside an entry to gate it on the Model, or pass it to `Subscription.persistent` for a listener that lives with the whole Subscriptions record.
+The helper returns a Stream, not a complete entry. Its `mapEvent` callback can produce any output type, including a raw event; `Subscription.make<Model, Message>()` checks that the final Stream supplied to an entry emits the application's Message type. Wrap it in `Stream.when` inside an entry to gate it on the Model, or pass it to `Subscription.persistent` for a listener that lives with the whole Subscriptions record.
 
 ::Snippet{name="subscriptionFromEvent" label="DOM event subscription example"}
 
-The `toMessage` mapper runs synchronously in the same call stack as the browser event, so it may call `event.preventDefault()` unless the listener is passive. Some browsers default wheel and touch listeners on global targets to passive, where cancellation is ignored. Pass `options: { passive: false }` when cancelling those events. Pass `target` as a thunk if it may not exist until the scope opens; pass always-present globals such as `window` and `document` directly.
+The `mapEvent` mapper runs synchronously in the same call stack as the browser event, so it may call `event.preventDefault()` unless the listener is passive. Some browsers default wheel and touch listeners on global targets to passive, where cancellation is ignored. Pass `options: { passive: false }` when cancelling those events. Pass `target` as a thunk if it may not exist until the scope opens; pass always-present globals such as `window` and `document` directly.
 
-Use `Subscription.fromEventFilterMap` when only some events should dispatch. Its mapper returns `Option.some(message)` to emit or `Option.none()` to ignore the event. For a listener attached to one rendered element, use [Mount](/core/mount) instead.
+The target, the event name, and the event your mapper receives are one fact rather than three. `type` is constrained to the events the target declares, so a misspelled name is a compile error rather than a listener that never fires, and `event` follows from both: `window` plus `'keydown'` gives you a `KeyboardEvent` with no type argument to write. A target with no declared event map, such as a bare `EventTarget`, accepts any name and reports `Event`. Annotate one with `Subscription.TypedEventTarget` to have its own events resolved the same way, `CustomEvent` detail included:
 
-When a handled event should also cancel its default action, use `Subscription.fromEventFilterMapPreventDefault`. Its mapper returns `Option.some(message)` to handle the event or `Option.none()` to leave its default behavior intact. The helper evaluates the mapper, calls `preventDefault()`, and queues the Message before the native listener returns. It registers the listener with `passive: false` by default and rejects `passive: true`, which would make cancellation ineffective.
+```ts
+const slowWarningTarget: Subscription.TypedEventTarget<{
+  'foldkit:slow-warning': CustomEvent<SlowWarningReport>
+}> = new EventTarget()
+```
+
+Annotating a native target adds its declared events without losing the native ones. If a declared event uses the same name as a native event, the declared type takes precedence.
+
+When only some events should produce a value, use `Subscription.fromEventFilterMap`. Its `filterMapEvent` returns `Option.some(value)` to emit it or `Option.none()` to ignore the event. A mapper that never emits produces a `Stream<never>`, which still composes wherever a Message-producing Stream is expected.
+
+When a handled event should also cancel its default action, use `Subscription.fromEventFilterMapPreventDefault`. Its `filterMapEvent` returns `Option.some(value)` to handle the event or `Option.none()` to leave its default behavior intact. The helper evaluates the mapper, calls `preventDefault()`, and queues the value before the native listener returns. Both filtered helpers infer their Stream output from `filterMapEvent`; `Subscription.make` checks the final Message type. The cancelling helper registers the listener with `passive: false` by default and does not accept `passive: true`, which would make cancellation ineffective.
+
+For a listener attached to one rendered element, use [Mount](/core/mount) instead.
+
+## Media Queries
+
+`Subscription.fromMediaQuery` creates a Stream from a CSS media query. When the Stream starts, it emits the query's current `matches` value through `mapMatches`. It emits again whenever the value changes. Handle those values as Messages in update to store the result in the Model. Most apps therefore do not need a separate `window.matchMedia` read at boot. An app that must use the value before its Subscriptions start, such as one that applies a theme before hydration, should still read it at boot.
+
+Reading the current value also prevents stale state when a gated entry restarts. Suppose a color-scheme Subscription runs only while the theme preference is `System`. The user selects `Dark`, changes the operating system to a light theme, and then selects `System` again. A new `change` listener waits for the next change, so the Model still records a dark system theme. `fromMediaQuery` reads the current light value as soon as the Stream restarts.
+
+::Snippet{name="subscriptionFromMediaQuery" label="reduced motion media query example"}
+
+The helper returns a Stream. Pass it to `Subscription.persistent` for a query the app always follows. To follow the query only in a particular Model state, use it with `Stream.when` inside an entry. Creating the Stream does not access `window`; `window.matchMedia` is called only when the Stream starts. The same helper works for `prefers-reduced-motion`, `prefers-color-scheme`, and viewport breakpoints such as `(max-width: 1023px)`.
+
+## Key Bindings
+
+`Subscription.keyBindings` builds a global `keydown` Stream from a declarative key-binding table. Use `keys` with a string for one press, such as `'Escape'` or `'Mod+K'`, and an array for an ordered sequence, such as `['G', 'H']`. Every step in a sequence uses the same grammar, including modifiers.
+
+::Snippet{name="subscriptionKeyBindings" label="key binding subscription example"}
+
+Modifier matching is exact: `'Mod+K'` does not also match Shift-Mod-K. `Mod` resolves to Meta on Apple platforms and Control elsewhere; `modKey` provides a deterministic override when needed. Matching uses the layout-aware `KeyboardEvent.key`, so include `Shift` and the resulting character for shifted punctuation. `Space` and `Plus` name keys that would otherwise be awkward in the `+`-separated syntax.
+
+By default, a binding calls `preventDefault()` and does not fire from an `input`, `textarea`, `select`, or contenteditable composed path. `whileTyping: 'Allow'` opts in bindings such as Escape that must work inside an editor. Events during IME composition and held-key repeats are ignored; a one-press binding can opt into repeats with `whenRepeated: 'Allow'`. An event that an element-level handler already canceled is also ignored, so local interactions take precedence over global bindings.
+
+### Sequences
+
+Sequences may have any length and expire after one second unless `sequenceTimeout` overrides the duration. The helper rejects duplicate bindings, a one-press binding that is also a sequence prefix, and shared sequence prefixes with inconsistent `preventDefault` policies. A mismatched key clears the current sequence and is reconsidered as a fresh press.
+
+### Model-Dependent Key Bindings
+
+The helper returns a Stream and infers its output from each binding's `mapEvent`; `Subscription.make` checks the final Message type. Put a fixed table in `Subscription.persistent`, or construct it from an entry's dependency record when availability follows the Model that owns the entry. Derive `isEnabled` from those dependencies, as the example does for Escape. If a parent owns a condition for a lifted child, declare the binding table at that parent or put bindings with different parent-owned lifetimes in separate child entries so `Subscription.lift` can gate them individually. If the meaning of a key depends on the Model, dispatch a factual Message such as `PressedEscape` and make the decision in update; `mapEvent` should not read application state.
 
 ## Keep a Stream Alive Across Dependency Changes {#advanced}
 

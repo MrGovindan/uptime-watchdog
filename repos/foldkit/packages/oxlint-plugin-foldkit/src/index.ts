@@ -11,6 +11,7 @@ import { lazyViewStableReferences } from './rules/lazy-view-stable-references.ts
 import { mountFactoryMustUseElement } from './rules/mount-factory-must-use-element.ts'
 import { noArrayIndexViewKeys } from './rules/no-array-index-view-keys.ts'
 import { noChildMessageConstructionInRoot } from './rules/no-child-message-construction-in-root.ts'
+import { noDirectSubmodelStateUpdate } from './rules/no-direct-submodel-state-update.ts'
 import { noDisablingDevGuardrails } from './rules/no-disabling-dev-guardrails.ts'
 import { noDuplicateOnmountPerElement } from './rules/no-duplicate-onmount-per-element.ts'
 import { noEmptyChildrenArray } from './rules/no-empty-children-array.ts'
@@ -26,12 +27,13 @@ import { noNoopMessage } from './rules/no-noop-message.ts'
 import { noPreventDefaultInStreamOperator } from './rules/no-prevent-default-in-stream-operator.ts'
 import { noRawDomEventAttributes } from './rules/no-raw-dom-event-attributes.ts'
 import { noRouteQueryConstructorDefault } from './rules/no-route-query-constructor-default.ts'
-import { noSpreadInEvo } from './rules/no-spread-in-evo.ts'
+import { noSpreadInModifyFields } from './rules/no-spread-in-modify-fields.ts'
 import { noSwitchOnMessageTag } from './rules/no-switch-on-message-tag.ts'
 import { preferCallableMessageConstructor } from './rules/prefer-callable-message-constructor.ts'
 import { preferCommandMapmessage } from './rules/prefer-command-mapmessage.ts'
 import { preferEffectModuleNames } from './rules/prefer-effect-module-names.ts'
 import { preferOptionOverNullableInModel } from './rules/prefer-option-over-nullable-in-model.ts'
+import { requireFoldForChildUpdateResult } from './rules/require-fold-for-child-update-result.ts'
 import { requireRelForExternalLink } from './rules/require-rel-for-external-link.ts'
 import { selectionSubmodelFactoryAtModuleScope } from './rules/selection-submodel-factory-at-module-scope.ts'
 import { wrapChildOutputInGotMessage } from './rules/wrap-child-output-in-got-message.ts'
@@ -52,6 +54,7 @@ const basePlugin = Plugin.define({
     'mount-factory-must-use-element': mountFactoryMustUseElement,
     'no-array-index-view-keys': noArrayIndexViewKeys,
     'no-child-message-construction-in-root': noChildMessageConstructionInRoot,
+    'no-direct-submodel-state-update': noDirectSubmodelStateUpdate,
     'no-disabling-dev-guardrails': noDisablingDevGuardrails,
     'no-duplicate-onmount-per-element': noDuplicateOnmountPerElement,
     'no-empty-children-array': noEmptyChildrenArray,
@@ -67,12 +70,13 @@ const basePlugin = Plugin.define({
     'no-prevent-default-in-stream-operator': noPreventDefaultInStreamOperator,
     'no-raw-dom-event-attributes': noRawDomEventAttributes,
     'no-route-query-constructor-default': noRouteQueryConstructorDefault,
-    'no-spread-in-evo': noSpreadInEvo,
+    'no-spread-in-modify-fields': noSpreadInModifyFields,
     'no-switch-on-message-tag': noSwitchOnMessageTag,
     'prefer-callable-message-constructor': preferCallableMessageConstructor,
     'prefer-command-mapmessage': preferCommandMapmessage,
     'prefer-effect-module-names': preferEffectModuleNames,
     'prefer-option-over-nullable-in-model': preferOptionOverNullableInModel,
+    'require-fold-for-child-update-result': requireFoldForChildUpdateResult,
     'require-rel-for-external-link': requireRelForExternalLink,
     'selection-submodel-factory-at-module-scope':
       selectionSubmodelFactoryAtModuleScope,

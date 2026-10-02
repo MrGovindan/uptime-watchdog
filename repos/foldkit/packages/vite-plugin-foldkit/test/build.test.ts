@@ -4,7 +4,7 @@ import { readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { win32 } from 'node:path'
 import { promisify } from 'node:util'
-import { type Plugin, createBuilder } from 'vite'
+import { type Plugin, type ViteBuilder, createBuilder } from 'vite'
 import { afterAll, describe, expect, it, onTestFinished } from 'vitest'
 
 import {
@@ -14,7 +14,12 @@ import {
   renderTargetFor,
 } from '../src/build.ts'
 import { foldkitBuildToken } from '../src/buildToken.ts'
-import { FoldkitBuildManifest } from '../src/index.ts'
+import {
+  type FoldkitBuildApi,
+  FoldkitBuildManifest,
+  FoldkitBuildMetadata,
+  foldkit,
+} from '../src/index.ts'
 
 const FIXTURE_ROOT = resolve(import.meta.dirname, 'fixtures/build')
 const SERVER_ENTRY = '/entry.server.ts'
@@ -62,7 +67,7 @@ const buildFixture = async (
     logLevel: 'silent',
     plugins: [
       ...extraPlugins,
-      foldkitBuildToken('test-build'),
+      ...foldkitBuildToken('test-build', false),
       foldkitBuild(SERVER_ENTRY, {
         ...options,
         clientOutDir: client,
@@ -88,12 +93,31 @@ describe('foldkitBuild', () => {
     const { client, server } = await buildFixture('both')
 
     expect(await filesUnder(server)).toEqual(['fetch.js', 'foldkit.build.json'])
-    expect(await filesUnder(client)).toContain('index.html')
+    expect(await filesUnder(client)).not.toContain('index.html')
 
     const { pathToFileURL } = await import('node:url')
     const built = await import(pathToFileURL(resolve(server, 'fetch.js')).href)
     expect(typeof built.default.fetch).toBe('function')
     expect(typeof built.renderPage).toBe('function')
+    expect(built).not.toHaveProperty('template')
+  })
+
+  it('keeps the template out of the browser build', async () => {
+    const { client, server } = await buildFixture('template-private', {
+      prerender: { paths: ['/about'] },
+    })
+
+    const files = await filesUnder(client)
+    expect(files).toContain('about/index.html')
+    expect(files).not.toContain('index.html')
+
+    const { pathToFileURL } = await import('node:url')
+    const built = await import(pathToFileURL(resolve(server, 'fetch.js')).href)
+    const response: Response = await built.default.fetch(
+      new Request('http://localhost/'),
+    )
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('>/</main>')
   })
 
   it('serves the Request.url the platform constructed', async () => {
@@ -145,21 +169,12 @@ describe('foldkitBuild', () => {
     ).toEqual(await readFile(resolve(first.client, 'index.html'), 'utf8'))
   })
 
-  // The generated `/` replaces the browser build's own `index.html`, so a build
-  // that read its template from that file would parse a page it generated on
-  // any second pass over one browser build. The template comes from the build
-  // result instead, which this pins by making the file on disk say something
-  // the build result does not: generation that reads the file produces pages
-  // carrying the corruption, generation that reads the build produces the
-  // pages below.
-  it('takes the template from the build rather than from the file it writes', async () => {
+  // NOTE: a later hook writes a different template to disk. Generation must
+  // use the template captured from Vite's bundle, not the disk file.
+  it('uses the captured template even when the disk index differs', async () => {
     const clientDir = 'dist-test/disk-template/client'
     const corruptClientIndex: Plugin = {
       name: 'test:corrupt-client-index',
-      // Both environment builds finish before pages are generated, so this
-      // needs no environment guard: whenever it runs, the file on disk is
-      // corrupt before generation reads anything.
-      //
       // NOTE: the marker is a meta element rather than the title, which
       // injection rewrites from the render's own Document. A corrupted title
       // is gone from the page it produced, so a test that watched the title
@@ -195,9 +210,7 @@ describe('foldkitBuild', () => {
 
     const files = await filesUnder(client)
     expect(files).toContain('about/index.html')
-    expect(await readFile(resolve(client, 'index.html'), 'utf8')).toContain(
-      '<div id="root"></div>',
-    )
+    expect(files).not.toContain('index.html')
   })
 
   // The fixture renders `url.pathname` into the page, so a request built by
@@ -235,9 +248,9 @@ describe('foldkitBuild', () => {
 
     expect(manifest.prerendered).toEqual(['/', '/about'])
     expect(manifest.serverEntry).toBe('fetch.js')
-    expect(manifest.host).toBe('fetch')
     expect(manifest.client).toContain('client')
     expect(manifest.server).toContain('server')
+    expect('host' in manifest).toBe(false)
   })
 
   it('reports no generated paths when the build generates none', async () => {
@@ -249,7 +262,6 @@ describe('foldkitBuild', () => {
 
     expect(manifest.prerendered).toEqual([])
     expect(manifest.serverEntry).toBe('fetch.js')
-    expect(manifest.host).toBe('fetch')
   })
 
   // The manifest describes the deployment, and the browser build is the part of
@@ -471,7 +483,7 @@ describe('foldkitBuild orchestration', () => {
       config: () => ({
         environments: {
           client: {
-            build: { rollupOptions: { input: { app: '/entry.client.ts' } } },
+            build: { rolldownOptions: { input: { app: '/entry.client.ts' } } },
           },
         },
       }),
@@ -521,7 +533,7 @@ describe('foldkitBuild orchestration', () => {
         environments: {
           ssr: {
             build: {
-              rollupOptions: {
+              rolldownOptions: {
                 input: {
                   unrelated: '/unrelated.ts',
                   'entry.server': '/entry.server.ts',
@@ -599,14 +611,13 @@ describe('foldkitBuild orchestration', () => {
 })
 
 const CONFIG_ROOT = resolve(import.meta.dirname, 'fixtures/build-config')
+const NO_HYDRATION_ROOT = resolve(
+  import.meta.dirname,
+  'fixtures/build-no-hydration',
+)
 const VITE_BIN = resolve(import.meta.dirname, '../node_modules/.bin/vite')
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/
 
-// Vite evaluates a config file once per environment it builds, so a config that
-// answers with a fresh id each time compiles one id into the browser bundle and
-// another into the server bundle, and hydration then refuses every page of the
-// deployment that just shipped. Only a real `vite build` reproduces that: an
-// in-process builder evaluates the config once, whatever the environments do.
 describe('the build id across environments', () => {
   it('compiles one id into both bundles of a single build', async () => {
     onTestFinished(async () => {
@@ -641,6 +652,317 @@ describe('the build id across environments', () => {
     expect(inClient).toBeDefined()
     expect(inServer).toBe(inClient)
   })
+
+  it('uses the environment override in both bundles and prerendered pages', async () => {
+    const buildId = 'environment-build-id'
+    onTestFinished(async () => {
+      await rm(resolve(CONFIG_ROOT, 'dist-test'), {
+        recursive: true,
+        force: true,
+      })
+    })
+
+    await promisify(execFile)(VITE_BIN, ['build'], {
+      cwd: CONFIG_ROOT,
+      env: { ...process.env, FOLDKIT_BUILD_ID: buildId },
+    })
+
+    const client = resolve(CONFIG_ROOT, 'dist-test/config/client')
+    const server = resolve(CONFIG_ROOT, 'dist-test/config/server')
+    const clientAssets = await readdir(resolve(client, 'assets'))
+    const clientBundle = await readFile(
+      resolve(
+        client,
+        'assets',
+        clientAssets.filter(file => file.endsWith('.js'))[0] ?? '',
+      ),
+      'utf8',
+    )
+    const serverBundle = await readFile(resolve(server, 'fetch.js'), 'utf8')
+    const page = await readFile(resolve(client, 'index.html'), 'utf8')
+
+    expect(clientBundle).toContain(buildId)
+    expect(serverBundle).toContain(buildId)
+    expect(page).toContain(`data-foldkit-build="${buildId}"`)
+  })
+
+  it.each(['before', 'after'])(
+    'shares one identity when a host orchestrator comes %s Foldkit',
+    async order => {
+      const outputRoot = `dist-test/host-${order}`
+      const clientOutDir = `${outputRoot}/client`
+      const serverOutDir = `${outputRoot}/server`
+      const hostOrchestrator: Plugin = {
+        name: `test:host-${order}`,
+        config: () => ({
+          builder: {
+            buildApp: async builder => {
+              const client = builder.environments['client']
+              const ssr = builder.environments['ssr']
+              if (client === undefined || ssr === undefined) {
+                throw new Error('expected client and ssr environments')
+              }
+
+              await builder.build(client)
+              await builder.build(ssr)
+            },
+          },
+        }),
+      }
+      const foldkitPlugins = foldkit({
+        ssr: {
+          serverEntry: '/entry.server.ts',
+          build: { clientOutDir, serverOutDir },
+        },
+      })
+      const plugins =
+        order === 'before'
+          ? [hostOrchestrator, foldkitPlugins]
+          : [foldkitPlugins, hostOrchestrator]
+      const builder = await createBuilder({
+        root: CONFIG_ROOT,
+        configFile: false,
+        logLevel: 'silent',
+        plugins,
+      })
+      onTestFinished(async () => {
+        await rm(resolve(CONFIG_ROOT, outputRoot), {
+          recursive: true,
+          force: true,
+        })
+      })
+
+      await builder.buildApp()
+
+      const clientAssets = await readdir(
+        resolve(CONFIG_ROOT, clientOutDir, 'assets'),
+      )
+      const clientBundle = await readFile(
+        resolve(
+          CONFIG_ROOT,
+          clientOutDir,
+          'assets',
+          clientAssets.filter(file => file.endsWith('.js'))[0] ?? '',
+        ),
+        'utf8',
+      )
+      const serverBundle = await readFile(
+        resolve(CONFIG_ROOT, serverOutDir, 'fetch.js'),
+        'utf8',
+      )
+      const inClient = UUID.exec(clientBundle)?.[0]
+      const inServer = UUID.exec(serverBundle)?.[0]
+
+      expect(inClient).toBeDefined()
+      expect(inServer).toBe(inClient)
+    },
+  )
+
+  it('allows a build whose server returns a response without hydrating', async () => {
+    const clientOutDir = 'dist-test/no-hydration/client'
+    const serverOutDir = 'dist-test/no-hydration/server'
+    const builder = await createBuilder({
+      root: NO_HYDRATION_ROOT,
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [
+        foldkit({
+          ssr: {
+            serverEntry: '/entry.server.ts',
+            build: { clientOutDir, serverOutDir },
+          },
+        }),
+      ],
+    })
+    onTestFinished(async () => {
+      await rm(resolve(NO_HYDRATION_ROOT, 'dist-test'), {
+        recursive: true,
+        force: true,
+      })
+    })
+
+    await builder.buildApp()
+  })
+
+  it('generates a fresh coordinated id for a later build in one process', async () => {
+    const clientOutDir = 'dist-test/repeated/client'
+    const serverOutDir = 'dist-test/repeated/server'
+    onTestFinished(async () => {
+      await rm(resolve(CONFIG_ROOT, 'dist-test/repeated'), {
+        recursive: true,
+        force: true,
+      })
+    })
+
+    const buildOnce = async (): Promise<string> => {
+      const builder = await createBuilder({
+        root: CONFIG_ROOT,
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [
+          foldkit({
+            ssr: {
+              serverEntry: '/entry.server.ts',
+              build: {
+                clientOutDir,
+                serverOutDir,
+                prerender: { paths: ['/'] },
+              },
+            },
+          }),
+        ],
+      })
+      await builder.buildApp()
+
+      const page = await readFile(
+        resolve(CONFIG_ROOT, clientOutDir, 'index.html'),
+        'utf8',
+      )
+      const buildId = UUID.exec(page)?.[0]
+      expect(buildId).toBeDefined()
+
+      const clientAssets = await readdir(
+        resolve(CONFIG_ROOT, clientOutDir, 'assets'),
+      )
+      const clientBundle = await readFile(
+        resolve(
+          CONFIG_ROOT,
+          clientOutDir,
+          'assets',
+          clientAssets.filter(file => file.endsWith('.js'))[0] ?? '',
+        ),
+        'utf8',
+      )
+      const serverBundle = await readFile(
+        resolve(CONFIG_ROOT, serverOutDir, 'fetch.js'),
+        'utf8',
+      )
+      expect(clientBundle).toContain(buildId)
+      expect(serverBundle).toContain(buildId)
+      return buildId ?? ''
+    }
+
+    const first = await buildOnce()
+    const second = await buildOnce()
+
+    expect(second).not.toBe(first)
+  })
+
+  it('isolates identities between concurrent coordinated builds', async () => {
+    const buildOnce = async (name: string): Promise<string> => {
+      const outputRoot = `dist-test/${name}`
+      const clientOutDir = `${outputRoot}/client`
+      const serverOutDir = `${outputRoot}/server`
+      const builder = await createBuilder({
+        root: CONFIG_ROOT,
+        cacheDir: `${outputRoot}/cache`,
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [
+          foldkit({
+            ssr: {
+              serverEntry: '/entry.server.ts',
+              build: {
+                clientOutDir,
+                serverOutDir,
+                prerender: { paths: ['/'] },
+              },
+            },
+          }),
+        ],
+      })
+      await builder.buildApp()
+
+      const page = await readFile(
+        resolve(CONFIG_ROOT, clientOutDir, 'index.html'),
+        'utf8',
+      )
+      const buildId = UUID.exec(page)?.[0]
+      expect(buildId).toBeDefined()
+
+      const clientAssets = await readdir(
+        resolve(CONFIG_ROOT, clientOutDir, 'assets'),
+      )
+      const clientBundle = await readFile(
+        resolve(
+          CONFIG_ROOT,
+          clientOutDir,
+          'assets',
+          clientAssets.filter(file => file.endsWith('.js'))[0] ?? '',
+        ),
+        'utf8',
+      )
+      const serverBundle = await readFile(
+        resolve(CONFIG_ROOT, serverOutDir, 'fetch.js'),
+        'utf8',
+      )
+      expect(clientBundle).toContain(buildId)
+      expect(serverBundle).toContain(buildId)
+      return buildId ?? ''
+    }
+
+    onTestFinished(async () => {
+      await Promise.all([
+        rm(resolve(CONFIG_ROOT, 'dist-test/concurrent-a'), {
+          recursive: true,
+          force: true,
+        }),
+        rm(resolve(CONFIG_ROOT, 'dist-test/concurrent-b'), {
+          recursive: true,
+          force: true,
+        }),
+      ])
+    })
+
+    const [first, second] = await Promise.all([
+      buildOnce('concurrent-a'),
+      buildOnce('concurrent-b'),
+    ])
+
+    expect(second).not.toBe(first)
+  })
+
+  it('refuses a server artifact that explicitly externalizes Foldkit', async () => {
+    const externalizeFoldkit: Plugin = {
+      name: 'test:externalize-foldkit',
+      config: () => ({
+        environments: {
+          ssr: {
+            resolve: {
+              external: ['foldkit'],
+            },
+          },
+        },
+      }),
+    }
+    const builder = await createBuilder({
+      root: CONFIG_ROOT,
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [
+        foldkit({
+          ssr: {
+            serverEntry: '/entry.server.ts',
+            build: {
+              clientOutDir: 'dist-test/external/client',
+              serverOutDir: 'dist-test/external/server',
+            },
+          },
+        }),
+        externalizeFoldkit,
+      ],
+    })
+    onTestFinished(async () => {
+      await rm(resolve(CONFIG_ROOT, 'dist-test/external'), {
+        recursive: true,
+        force: true,
+      })
+    })
+
+    await expect(builder.buildApp()).rejects.toThrow(
+      /Foldkit singleton package was externalized from the ssr artifact/,
+    )
+  })
 })
 
 const CONTAINER_ROOT = resolve(import.meta.dirname, 'fixtures/build-container')
@@ -659,4 +981,328 @@ it('generates into the container the build names', async () => {
   const generated = await readFile(resolve(client, 'index.html'), 'utf8')
   expect(generated).toContain('>/</main>')
   expect(generated).not.toContain('<div id="app-root"></div>')
+})
+
+// BUILD METADATA
+
+const METADATA_NOT_READY =
+  '[foldkit] build metadata is not available. Read it after a successful builder.buildApp().'
+
+const metadataApi = (builder: ViteBuilder): FoldkitBuildApi => {
+  const api: FoldkitBuildApi | undefined = builder.config.plugins.find(
+    plugin => plugin.name === 'foldkit:build',
+  )?.api
+
+  if (api === undefined) {
+    throw new Error('Missing Foldkit build plugin')
+  }
+
+  return api
+}
+
+const metadataFixture = async (
+  name: string,
+  options: FoldkitBuildOptions = { prerender: true },
+  pluginsBeforeFoldkit: ReadonlyArray<Plugin> = [],
+  pluginsAfterFoldkit: ReadonlyArray<Plugin> = [],
+) => {
+  const directory = `dist-test/metadata-${name}`
+  onTestFinished(() =>
+    rm(resolve(FIXTURE_ROOT, directory), { recursive: true, force: true }),
+  )
+
+  const builder = await createBuilder({
+    configFile: false,
+    root: FIXTURE_ROOT,
+    logLevel: 'silent',
+    plugins: [
+      ...pluginsBeforeFoldkit,
+      foldkitBuildToken('test-build'),
+      foldkitBuild(SERVER_ENTRY, {
+        clientOutDir: `${directory}/client`,
+        serverOutDir: `${directory}/server`,
+        ...options,
+      }),
+      ...pluginsAfterFoldkit,
+    ],
+  })
+
+  return { builder, directory }
+}
+
+describe('completed build metadata', () => {
+  it('exposes a frozen serializable snapshot after a completed build', async () => {
+    const fixture = await metadataFixture('completed')
+    await fixture.builder.buildApp()
+
+    const metadata = metadataApi(fixture.builder).getBuildMetadata()
+    expect(metadata.root).toBe(FIXTURE_ROOT)
+    expect(metadata.clientDirectory).toBe(
+      resolve(FIXTURE_ROOT, fixture.directory, 'client'),
+    )
+    expect(metadata.serverDirectory).toBe(
+      resolve(FIXTURE_ROOT, fixture.directory, 'server'),
+    )
+    expect(metadata.manifest.prerendered).toEqual(['/', '/about'])
+    expect(metadata.serverEntry).toBe(
+      resolve(FIXTURE_ROOT, fixture.directory, 'server/fetch.js'),
+    )
+    expect(await filesUnder(metadata.clientDirectory)).toContain(
+      'about/index.html',
+    )
+    expect(await filesUnder(metadata.serverDirectory)).toContain('fetch.js')
+    expect(Object.isFrozen(metadata)).toBe(true)
+    expect(Object.isFrozen(metadata.manifest)).toBe(true)
+    expect(Object.isFrozen(metadata.manifest.prerendered)).toBe(true)
+    expect(
+      Schema.decodeUnknownSync(FoldkitBuildMetadata)(
+        JSON.parse(JSON.stringify(metadata)),
+      ),
+    ).toEqual(metadata)
+    expect(
+      JSON.parse(
+        await readFile(
+          resolve(metadata.serverDirectory, 'foldkit.build.json'),
+          'utf8',
+        ),
+      ),
+    ).toEqual(metadata.manifest)
+  })
+
+  it('refuses metadata before the first build', async () => {
+    const fixture = await metadataFixture('not-ready')
+    expect(() => metadataApi(fixture.builder).getBuildMetadata()).toThrow(
+      METADATA_NOT_READY,
+    )
+  })
+
+  it('uses host-overridden directories for metadata and generated files', async () => {
+    const directory = 'dist-test/metadata-overridden'
+    const client = `${directory}/host-client`
+    const server = `${directory}/host-server`
+    const fixture = await metadataFixture(
+      'overridden',
+      { prerender: true },
+      [],
+      [
+        {
+          name: 'test:override-output',
+          config: () => ({
+            environments: {
+              client: { build: { outDir: client } },
+              ssr: { build: { outDir: server } },
+            },
+          }),
+        },
+      ],
+    )
+    await fixture.builder.buildApp()
+    const metadata = metadataApi(fixture.builder).getBuildMetadata()
+    expect(metadata.clientDirectory).toBe(resolve(FIXTURE_ROOT, client))
+    expect(metadata.serverDirectory).toBe(resolve(FIXTURE_ROOT, server))
+    expect(metadata.manifest.client).toBe(client)
+    expect(metadata.manifest.server).toBe(server)
+    expect(await filesUnder(metadata.clientDirectory)).toContain(
+      'about/index.html',
+    )
+    expect(
+      JSON.parse(
+        await readFile(
+          resolve(metadata.serverDirectory, 'foldkit.build.json'),
+          'utf8',
+        ),
+      ),
+    ).toEqual(metadata.manifest)
+  })
+
+  it('reports the emitted nested hashed entry filename', async () => {
+    const fixture = await metadataFixture(
+      'hashed-entry',
+      { prerender: true },
+      [],
+      [
+        {
+          name: 'test:hashed-entry',
+          config: () => ({
+            environments: {
+              ssr: {
+                build: {
+                  rolldownOptions: {
+                    output: { entryFileNames: 'entries/[name]-[hash].js' },
+                  },
+                },
+              },
+            },
+          }),
+        },
+      ],
+    )
+    await fixture.builder.buildApp()
+    const metadata = metadataApi(fixture.builder).getBuildMetadata()
+    expect(metadata.manifest.serverEntry).toMatch(/^entries\/fetch-.+\.js$/)
+    expect(metadata.serverEntry).toBe(
+      resolve(metadata.serverDirectory, metadata.manifest.serverEntry),
+    )
+    expect(await filesUnder(metadata.serverDirectory)).toContain(
+      metadata.manifest.serverEntry,
+    )
+  })
+
+  for (const sharedConfigBuild of [false, true]) {
+    it(`shares config-file captures with sharedConfigBuild=${sharedConfigBuild}`, async () => {
+      const directory = `dist-test/metadata-config-${sharedConfigBuild}`
+      onTestFinished(() =>
+        rm(resolve(CONFIG_ROOT, directory), { recursive: true, force: true }),
+      )
+      const builder = await createBuilder({
+        root: CONFIG_ROOT,
+        builder: { sharedConfigBuild },
+        plugins: [
+          {
+            name: 'test:metadata-config-output',
+            enforce: 'post',
+            config: () => ({
+              environments: {
+                client: { build: { outDir: `${directory}/client` } },
+                ssr: { build: { outDir: `${directory}/server` } },
+              },
+            }),
+          },
+        ],
+      })
+      const plugin = builder.config.plugins.find(
+        plugin => plugin.name === 'foldkit:build',
+      )
+      for (const environment of Object.values(builder.environments)) {
+        expect(
+          environment.plugins.find(plugin => plugin.name === 'foldkit:build'),
+        ).toBe(plugin)
+      }
+      await builder.buildApp()
+      expect(
+        metadataApi(builder).getBuildMetadata().manifest.prerendered,
+      ).toEqual(['/'])
+    })
+  }
+
+  it('invalidates completed metadata while rebuilding and replaces the snapshot', async () => {
+    const paths = ['/']
+    let isRebuilding = false
+    const observed: Array<string> = []
+    const fixture = await metadataFixture(
+      'rebuild',
+      { prerender: { paths } },
+      [],
+      [
+        {
+          name: 'test:observe-rebuild',
+          buildStart: {
+            order: 'post',
+            handler() {
+              if (isRebuilding) {
+                expect(() =>
+                  metadataApi(fixture.builder).getBuildMetadata(),
+                ).toThrow(METADATA_NOT_READY)
+                observed.push(this.environment.name)
+              }
+            },
+          },
+        },
+      ],
+    )
+    await fixture.builder.buildApp()
+    const previous = metadataApi(fixture.builder).getBuildMetadata()
+    paths.push('/about')
+    isRebuilding = true
+    await fixture.builder.buildApp()
+    expect(observed).toEqual(['client', 'ssr'])
+    expect(previous.manifest.prerendered).toEqual(['/'])
+    expect(
+      metadataApi(fixture.builder).getBuildMetadata().manifest.prerendered,
+    ).toEqual(['/', '/about'])
+  })
+
+  it('invalidates metadata when only the server rebuilds', async () => {
+    const fixture = await metadataFixture('server-rebuild')
+    await fixture.builder.buildApp()
+    const previous = metadataApi(fixture.builder).getBuildMetadata()
+    const server = fixture.builder.environments['ssr']
+
+    if (server === undefined) {
+      throw new Error('Missing ssr environment')
+    }
+
+    await fixture.builder.build(server)
+    expect(() => metadataApi(fixture.builder).getBuildMetadata()).toThrow(
+      METADATA_NOT_READY,
+    )
+    expect(previous.manifest.prerendered).toEqual(['/', '/about'])
+
+    await fixture.builder.buildApp()
+    expect(
+      metadataApi(fixture.builder).getBuildMetadata().manifest.prerendered,
+    ).toEqual(['/', '/about'])
+  })
+
+  it('discards completed metadata when a rebuild fails', async () => {
+    let isFailing = false
+    const fixture = await metadataFixture(
+      'failure',
+      { prerender: true },
+      [],
+      [
+        {
+          name: 'test:metadata-failure',
+          generateBundle() {
+            if (isFailing && this.environment.name === 'client') {
+              throw new Error('controlled client failure')
+            }
+          },
+        },
+      ],
+    )
+    await fixture.builder.buildApp()
+    expect(
+      metadataApi(fixture.builder).getBuildMetadata().manifest.prerendered,
+    ).toEqual(['/', '/about'])
+
+    isFailing = true
+    await expect(fixture.builder.buildApp()).rejects.toThrow(
+      /controlled client failure/,
+    )
+    expect(() => metadataApi(fixture.builder).getBuildMetadata()).toThrow(
+      METADATA_NOT_READY,
+    )
+  })
+
+  it('cannot reuse captures from another plugin with the same output layout', async () => {
+    const first = await metadataFixture('isolated-captures')
+    await first.builder.buildApp()
+    const second = await metadataFixture(
+      'isolated-captures',
+      { prerender: true },
+      [
+        {
+          name: 'test:skip-client',
+          config: () => ({
+            builder: {
+              buildApp: async builder => {
+                const server = builder.environments['ssr']
+                if (server === undefined) {
+                  throw new Error('Missing ssr environment')
+                }
+                await builder.build(server)
+              },
+            },
+          }),
+        },
+      ],
+    )
+    await expect(second.builder.buildApp()).rejects.toThrow(
+      /has not emitted index\.html/,
+    )
+    expect(() => metadataApi(second.builder).getBuildMetadata()).toThrow(
+      METADATA_NOT_READY,
+    )
+  })
 })

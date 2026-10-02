@@ -1,6 +1,7 @@
 export { aggregate, lift, make, persistent } from './subscription.js'
 
 export type {
+  EntryGates,
   EntryWithoutKeepAlive,
   GatedDependencies,
   Subscription,
@@ -21,4 +22,18 @@ export type {
   FromEventConfig,
   FromEventFilterMapConfig,
   FromEventFilterMapPreventDefaultConfig,
+  TypedEventTarget,
 } from './fromEvent.js'
+
+export { fromMediaQuery } from './fromMediaQuery.js'
+
+export type { FromMediaQueryConfig } from './fromMediaQuery.js'
+
+export { keyBindings } from './keyBindings.js'
+
+export type {
+  KeyBinding,
+  KeyBindingsConfig,
+  KeySequence,
+  WhileTyping,
+} from './keyBindings.js'

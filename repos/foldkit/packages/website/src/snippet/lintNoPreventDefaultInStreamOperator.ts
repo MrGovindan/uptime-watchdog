@@ -15,13 +15,10 @@ const keyboardBad = Stream.fromEventListener<KeyboardEvent>(
 )
 
 // ✅ Good: Some marks Tab handled, so Foldkit cancels it inside the listener.
-const keyboardGood = Subscription.fromEventFilterMapPreventDefault<
-  KeyboardEvent,
-  Message
->({
+const keyboardGood = Subscription.fromEventFilterMapPreventDefault({
   target: document,
   type: 'keydown',
-  toMessage: event =>
+  filterMapEvent: event =>
     event.key === 'Tab'
       ? Option.some(Message.PressedKey({ key: event.key }))
       : Option.none(),

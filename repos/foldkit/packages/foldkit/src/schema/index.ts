@@ -155,8 +155,8 @@ const makeCallable = <Tag extends string, Fields extends Schema.Struct.Fields>(
     apply(_target, _thisArg, argumentsList) {
       return construct(argumentsList[0])
     },
-    get(_target, property, receiver) {
-      return Reflect.get(schema, property, receiver)
+    get(_target, property) {
+      return Reflect.get(schema, property)
     },
     has(_target, property) {
       return Reflect.has(schema, property)
@@ -234,7 +234,7 @@ type TaggedUnionMatchOrElseCases<
   ) => Output
 }
 
-type TaggedUnionMatchOrElseCaseReturns<Cases> = {
+type TaggedUnionCaseReturns<Cases> = {
   [Tag in keyof Cases]-?: NonNullable<Cases[Tag]> extends (
     ...args: never
   ) => infer Output
@@ -243,7 +243,7 @@ type TaggedUnionMatchOrElseCaseReturns<Cases> = {
 }[keyof Cases]
 
 type TaggedUnionMatchOrElseOutput<Cases, OrElse> =
-  | TaggedUnionMatchOrElseCaseReturns<Cases>
+  | TaggedUnionCaseReturns<Cases>
   | (OrElse extends (...args: never) => infer Output ? Output : never)
 
 type TaggedUnionMatchOrElseHandledTags<
@@ -256,7 +256,7 @@ type TaggedUnionMatchOrElseHandledTags<
   keyof CasesByTag & string
 >
 
-type ValidateMatchOrElseCases<
+type ValidateTaggedUnionCases<
   CasesByTag extends Record<string, Schema.Struct.Fields>,
   Cases,
 > = {
@@ -265,6 +265,22 @@ type ValidateMatchOrElseCases<
 
 type TaggedUnionMatch<CasesByTag extends Record<string, Schema.Struct.Fields>> =
   {
+    <
+      Input extends TaggedUnionType<CasesByTag>,
+      const Cases extends TaggedUnionMatchCases<CasesByTag, Input, unknown>,
+    >(
+      value: Input,
+      cases: Cases & ValidateTaggedUnionCases<CasesByTag, Cases>,
+    ): TaggedUnionCaseReturns<Cases>
+    <
+      const Cases extends TaggedUnionMatchCases<
+        CasesByTag,
+        TaggedUnionType<CasesByTag>,
+        unknown
+      >,
+    >(
+      cases: Cases & ValidateTaggedUnionCases<CasesByTag, Cases>,
+    ): (value: TaggedUnionType<CasesByTag>) => TaggedUnionCaseReturns<Cases>
     <
       Output,
       Input extends TaggedUnionType<CasesByTag> = TaggedUnionType<CasesByTag>,
@@ -296,7 +312,7 @@ type TaggedUnionMatchOrElse<
     ) => unknown,
   >(
     value: Input,
-    cases: Cases & ValidateMatchOrElseCases<CasesByTag, Cases>,
+    cases: Cases & ValidateTaggedUnionCases<CasesByTag, Cases>,
     orElse: OrElse,
   ): TaggedUnionMatchOrElseOutput<Cases, OrElse>
   <
@@ -314,7 +330,7 @@ type TaggedUnionMatchOrElse<
       >,
     ) => unknown,
   >(
-    cases: Cases & ValidateMatchOrElseCases<CasesByTag, Cases>,
+    cases: Cases & ValidateTaggedUnionCases<CasesByTag, Cases>,
     orElse: OrElse,
   ): (
     value: TaggedUnionType<CasesByTag>,
@@ -392,9 +408,11 @@ interface RichUnionSchema<
 
 /** The Schema returned by `defineTaggedUnion`. It includes callable variant
  * constructors, exhaustive `match`, partial `matchOrElse`, `guards`,
- * `isAnyOf`, `subset`, and `members`. Pass a structurally refined union as a
- * matcher's optional second type argument to preserve narrower payload fields
- * in each handler. */
+ * `isAnyOf`, `subset`, and `members`. With no output type argument, `match`
+ * returns the union of the handler results. Pass an output type argument when
+ * every handler must return that type. Pass a structurally refined union as
+ * the optional second type argument to preserve narrower payload fields in
+ * each handler. */
 export type TaggedUnion<
   CasesByTag extends Record<string, Schema.Struct.Fields>,
 > = RichUnionSchema<CasesByTag> & {
@@ -405,7 +423,9 @@ export type TaggedUnion<
 }
 
 /** The Schema returned by `defineMessageUnion`. Each variant is a callable
- * property on the union, and `match` handles the union exhaustively. Pass a
+ * property on the union, and `match` handles the union exhaustively. With no
+ * output type argument, `match` returns the union of the handler results. Pass
+ * an output type argument when every handler must return that type. Pass a
  * structurally refined union as `match`'s optional second type argument to
  * preserve narrower payload fields in each handler. */
 export type MessageUnion<
