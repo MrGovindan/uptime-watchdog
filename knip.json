@@ -39,7 +39,8 @@
       "entry": ["src/vite.ts"]
     },
     "packages/vite-plugin-foldkit": {
-      "ignoreFiles": ["test/fixtures/**"]
+      "ignoreFiles": ["test/fixtures/**"],
+      "ignoreDependencies": ["@effect/platform-node-shared"]
     },
     "packages/markdown": {
       "entry": ["src/index.ts", "src/vite/public.ts"]
@@ -61,7 +62,7 @@
         "scripts/**/*.test.ts",
         "e2e/livePlaygrounds.ts"
       ],
-      "ignore": ["src/snippet/**", "public/**"],
+      "ignore": ["src/snippet/**"],
       "ignoreDependencies": [
         "@foldkit/api-reference-generator",
         "@foldkit/devtools"
@@ -113,7 +114,7 @@
       "ignoreDependencies": ["tailwindcss"]
     }
   },
-  "ignore": ["**/*.css", "packages/website/public/**"],
+  "ignore": ["**/*.css"],
   "ignoreDependencies": ["@foldkit/oxlint-plugin", "tailwindcss", "madge"],
   "ignoreBinaries": ["typecheck"]
 }

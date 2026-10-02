@@ -9,10 +9,9 @@ import type { Message } from './message'
 import type { Model } from './model'
 import raw from './sliderPage.md'
 
-const { tableOfContents, view: renderPage } = slotDocPage<'slider'>(
-  raw,
-  'ui/slider',
-)
+const { tableOfContents, view: renderPage } = slotDocPage<
+  'horizontal' | 'vertical'
+>(raw, 'ui/slider')
 
 export { tableOfContents }
 
@@ -25,14 +24,17 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>(
   (model, { renderCopyButton, renderHeadingLink }, h): Html =>
     renderPage({
       demos: {
-        slider: demoContainer(
-          ...Slider.view(
-            {
-              ratingModel: model.sliderRatingDemo,
-              ratingValue: model.sliderRatingValue,
-              volumeModel: model.sliderVolumeDemo,
-              volumeValue: model.sliderVolumeValue,
-            },
+        horizontal: demoContainer(
+          ...Slider.horizontalDemo(
+            model.sliderRatingDemo,
+            model.sliderRatingValue,
+            h,
+          ),
+        ),
+        vertical: demoContainer(
+          ...Slider.verticalDemo(
+            model.sliderVolumeDemo,
+            model.sliderVolumeValue,
             h,
           ),
         ),

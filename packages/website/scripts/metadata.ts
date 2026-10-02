@@ -152,7 +152,7 @@ const METADATA_BY_TAG: Record<StaticRouteTag, PageMetadata> = {
   ),
   BestPracticesImmutability: docs(
     'Immutability',
-    'Update Models immutably with evo, preserving references for unchanged branches and keeping state transitions predictable.',
+    'Update Models immutably with modifyFields, preserving references for unchanged branches and keeping state transitions predictable.',
     'Best Practices',
   ),
   ProjectOrganization: docs(
@@ -182,7 +182,7 @@ const METADATA_BY_TAG: Record<StaticRouteTag, PageMetadata> = {
   ),
   CoreUpdate: core(
     'Update',
-    'Handle every Message with a pure update function that returns the next Model and Commands. Use Match and evo to keep transitions exhaustive and immutable.',
+    'Handle every Message with a pure update function that returns the next Model and Commands. Use Match and modifyFields to keep transitions exhaustive and immutable.',
   ),
   CoreView: core(
     'View',
@@ -379,6 +379,14 @@ const METADATA_BY_TAG: Record<StaticRouteTag, PageMetadata> = {
   UiSlider: ui(
     'Slider',
     'A numeric range Submodel with pointer dragging, keyboard navigation, constraints, steps, and ARIA slider semantics.',
+  ),
+  UiMeter: ui(
+    'Meter',
+    'A scalar value in a known range with meter semantics, clamped aria-valuenow, and threshold data attributes.',
+  ),
+  UiProgress: ui(
+    'Progress',
+    'Task progress with determinate and indeterminate states, progressbar semantics, and data-state styling hooks.',
   ),
   UiSwitch: ui(
     'Switch',

@@ -19,6 +19,7 @@ Read those when a rule needs context.
 - Always use Schema types (not plain TypeScript types), full names like `Message` (not `Msg`), and `withReturnType` (not `as const` or type casting).
 - Foldkit is tightly coupled to Effect-TS. Do not suggest solutions outside the Effect ecosystem. Check existing features in `create-foldkit-app` before suggesting new ones.
 - Push back on any direction that violates Elm Architecture principles: unidirectional data flow, Messages as facts, Model as single source of truth, side effects confined to Commands. Flag the issue and propose the Foldkit approach that preserves those principles.
+- Run TypeScript scripts with `node` directly, as in `node scripts/check-peer-floors.ts`. Every Node version in `engines` strips types, so the workspace has no `tsx`, `vite-node`, or other loader, and none may be added. Node resolves imports literally: write the extension the file has, and reach package code through its built entry rather than its source. A script whose module graph needs Vite's resolution, such as the website's `openapi` and `prerender`, is bundled with `vite build --ssr` first and the bundle runs under `node`. `erasableSyntaxOnly` in the base tsconfig keeps every source within what Node can strip.
 
 ## Exemplar Files
 
@@ -80,6 +81,7 @@ Match the implementation style to the subsystem and the behavior being modeled. 
 - Use `pipe` when the value being transformed should remain the subject of clear left-to-right data flow. A single transformation is valid when that order carries meaning, as in `pipe(dialogClose, Update.withOutMessage(outMessage))`. Call the function directly when `pipe` only rearranges an ordinary call.
 - In multi-line `pipe` chains, put the data being piped on its own line.
 - Use Effect module functions over native methods in pipes (`Array.map`, `String.includes`, `String.indexOf`, etc.). Native methods are fine when calling directly on a named variable.
+- Use `Predicate.isString` for string guards, never `typeof value === 'string'`.
 - Import Effect modules by their PascalCase name (`Array`, `String`, `Number`, `Function`, `Option`). Qualify a same-named JavaScript or TypeScript global through `globalThis`, such as `globalThis.String`, `globalThis.Array`, or `globalThis.Record`. When an existing local or public binding must retain the module name, give the Effect import an explicit `Effect` prefix, such as `Order as EffectOrder`. Use a named `import type` when an Effect submodule contributes one type and none of its runtime API is used. Use a namespace import when accessing the module's values or multiple exports.
 - Never use sentinel values to signal absence (`-1` from `.indexOf()`, `null`, empty strings, `NaN`). Use `Option`-returning helpers like `String.indexOf`, `Array.findFirst`, `Option.fromNullishOr`.
 - Never `Option.match` with `onNone: Function.constVoid`. Use `Option.isSome` with an explicit `if`.
@@ -101,9 +103,9 @@ Match the implementation style to the subsystem and the behavior being modeled. 
 - Prefer explicit `if`/`else` when both branches return. Early-return reads as "A is exceptional, B is the default"; reserve it for true guards.
 - Use `Readonly<{...}>` over per-property `readonly` for inline object types.
 - Constrain branch returns at the match boundary: the return-type generic on a union `match` or `matchOrElse` (`UrlRequest.match<UpdateReturn>(request, { ... })`), or `Match.withReturnType<...>()` (or `Match.withReturnType` when imported under its full module name) on an Effect `Match`. This includes tuple literals nested inside Effect or Option constructors. Never use `as const` inside branches to recover tuple or literal inference.
-- Don't add type annotations or `as const` to callbacks whose return type is constrained by the outer API (e.g. evo callbacks, `Option.match`, `Match.tagsExhaustive`). Let inference work.
-- Pass `evo` field transformers point-free when the update depends only on that field's current value: `entries: Array.map(toRow)`, `currentStep: toNextStep`, `priceSlider: Slider.reflectRange(range)`. Use `() => value` when replacing a field with a Message payload, a child update result, a Command result, or a value derived from another field.
-- Tests follow the same Model evolution convention as application code. Use `evo` when deriving a next Model from an existing Model. Object literals and spread remain valid when constructing fresh fixtures and non-Model values.
+- Don't add type annotations or `as const` to callbacks whose return type is constrained by the outer API (e.g. modifyFields callbacks, `Option.match`, `Match.tagsExhaustive`). Let inference work.
+- Pass `modifyFields` field transformers point-free when the update depends only on that field's current value: `entries: Array.map(toRow)`, `currentStep: toNextStep`, `priceSlider: Slider.reflectRange(range)`. Use `() => value` when replacing a field with a Message payload, a child update result, a Command result, or a value derived from another field.
+- Tests follow the same Model evolution convention as application code. Use `modifyFields` when deriving a next Model from an existing Model. Object literals and spread remain valid when constructing fresh fixtures and non-Model values.
 - `Effect.acquireRelease` registers the release only after the acquire body completes. Construct the resource inside the acquire Effect, never before it. Anything else leaks on interruption.
 
 ## Comments
@@ -113,7 +115,13 @@ Don't add inline or block comments to explain code. If code needs explanation, r
 - Section headers: `// MODEL`, `// MESSAGE`, `// INIT`, `// UPDATE`, `// VIEW`, `// COMMAND`, and short descriptive headers for sections outside that set (`// SHARED STYLES`, `// TABLE OF CONTENTS`).
 - TSDoc (`/** ... */`) on all public exports of a published package (`packages/*`). An `export const` in `examples/` is module wiring so `entry.ts` and scene tests can import it, not public API, and takes a `// NOTE:` like any other explanatory comment.
 - `// NOTE:` comments, with a high bar. Only for behavior that would mislead a careful reader (timing dependency, upstream bug workaround, browser quirk). Not for normal patterns, state machine shapes, framework idioms, or what a function does.
-- The first source comment in a bad or good documentation snippet, marked with ❌ or ✅ using the language's comment syntax.
+- The first source comment in a documentation snippet that is explicitly one side of a bad/good comparison, marked with ❌ or ✅ using the language's comment syntax. Normal example snippets do not take an emoji label comment.
+
+## Documentation Snippets
+
+- Never put executable or copyable source examples directly in website Markdown. Put each example in `packages/website/src/snippet/` and render it with `::Snippet` so it has one source file. Fenced blocks remain valid for diagrams and literal output that readers do not copy as source.
+- Changesets cannot render website islands, so fenced source examples with a language identifier are appropriate there.
+- Preserve published blog posts, release announcements, and their dedicated snippets as historical records. Do not update them to reflect later API changes; put current usage and migration guidance in active docs and changesets.
 
 ## View Architecture
 
@@ -134,6 +142,11 @@ Don't add inline or block comments to explain code. If code needs explanation, r
 - App code (`examples/`, `packages/website/`, `packages/typing-game/`) imports Scene and Story steps as named imports from `foldkit/scene` or `foldkit/story`: `import { Command, given, message, model, story } from 'foldkit/story'`. A test file needs only one of the two modules, so this keeps call sites short.
 - When one file tests both a story and a scene, import the namespaces instead (`import { Scene, Story } from 'foldkit'`) so `Story.given` and `Scene.given` stay distinguishable. `packages/ui/` and `packages/foldkit/` keep the namespace form throughout, since their tests routinely mix both.
 - The step that sets the initial Model is `given`, not `with`. `with` is a reserved word and cannot be a named import binding.
+
+## Session Echoes
+
+- Do not leave session echoes in code, tests, comments, documentation, or names. A session echo records the path taken during the current change instead of a durable contract: assertions that abandoned identifiers or implementations are absent, notes about discarded attempts, or references to debugging and review conversation.
+- Regression tests must exercise a durable contract or reproduce a user-visible failure through supported inputs and outputs. When replacing an implementation, delete obsolete structural assertions instead of inverting them to assert that the old implementation is gone.
 
 ## Choosing Lifecycle Primitives
 
@@ -202,6 +215,16 @@ If `pnpm typecheck`, `pnpm lint`, `pnpm build`, or the pre-push hook surfaces er
 ## GitHub CLI Authentication
 
 A sandboxed `gh auth status` result is not evidence that the saved GitHub credential is invalid. The sandbox may block the GitHub API request and `gh` can report that failure as an invalid token. When GitHub authentication matters, rerun `gh auth status` with network access, requesting escalation when the environment requires it. Apply the same retry to an important `gh` command that fails with a likely sandbox or network error. Only ask the user to run `gh auth login` after the network-enabled check also fails.
+
+## Adding Example Apps
+
+New apps in `examples/` need a few explicit registrations. The workspace, website builds, and E2E planner discover the rest.
+
+- Create `examples/<slug>/` with a private workspace package name (usually `<slug>-example`), then add `dev:example:<slug>` to the root `package.json`.
+- Add the slug and its metadata to `packages/website/src/page/example/meta.ts`, and its source loader to `packages/website/src/page/example/sources.ts`. Those entries feed the example page, playground, and website build.
+- Add the private package to `.changeset/config.json`'s ignore list. Add a `knip.json` override only for entry points or dependencies the normal example rule does not cover.
+- Add `packages/examples-e2e/e2e/<slug>.spec.ts`. The default Playwright command runs Vite for the slug; add a special case in `packages/examples-e2e/playwright.config.ts` only when the app needs another command.
+- Check any special worker, dependency pin, or build requirements before adding CI configuration. The root README lists selected examples, not every app, so update it when the new example belongs in that introduction.
 
 ## Debugging Example Apps
 

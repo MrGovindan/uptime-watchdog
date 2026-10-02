@@ -114,11 +114,11 @@ This is a syntax-only rule. It flags any literal property named `commands`, even
 
 ::Snippet{name="lintNoEmptyCommandsArray" label="foldkit/no-empty-commands-array example"}
 
-### foldkit/no-spread-in-evo {#no-spread-in-evo}
+### foldkit/no-spread-in-modify-fields {#no-spread-in-modify-fields}
 
-Rejects object spreads inside an evo updater. Evolve nested fields with a nested evo instead.
+Rejects object spreads inside a modifyFields updater. Evolve nested fields with a nested modifyFields instead.
 
-::Snippet{name="lintNoSpreadInEvo" label="foldkit/no-spread-in-evo example"}
+::Snippet{name="lintNoSpreadInModifyFields" label="foldkit/no-spread-in-modify-fields example"}
 
 ## State Modeling {#state-modeling-rules}
 
@@ -186,7 +186,7 @@ Catches an inline empty array in the children slot, on element builders and on k
 
 Flags `preventDefault()` inside callbacks passed to `Stream.map`, `Stream.mapEffect`, `Stream.filterMap`, `Stream.filterMapEffect`, `Stream.filter`, `Stream.filterEffect`, or `Stream.tap`. A DOM event placed into a callback-backed Stream is queued before downstream operators run, so cancellation there happens after the native listener returns and may be too late for the browser.
 
-Use `Subscription.fromEventFilterMapPreventDefault` instead. Its mapper returns `Option.some(message)` for a handled event or `Option.none()` for an event the browser should handle normally. Foldkit calls `preventDefault()` for handled events before the native listener returns.
+Use `Subscription.fromEventFilterMapPreventDefault` instead. Its `filterMapEvent` mapper returns `Option.some(value)` for a handled event or `Option.none()` for an event the browser should handle normally. Foldkit calls `preventDefault()` for handled events before the native listener returns.
 
 The rule recognizes inline callbacks and functions declared in the same module. It is intentionally conservative about the Stream's source. Suppress it when the value is not a DOM event or the Stream is deliberately executed synchronously inside a native listener.
 
@@ -274,9 +274,21 @@ Keeps a Got wrapper payload to the child Message plus routing keys: message, id,
 
 ### foldkit/no-child-message-construction-in-root {#no-child-message-construction-in-root}
 
-Rejects constructing a child Message variant from a parent. Expose a child-owned update capability that applies the internal fact, then integrate it with `Update.foldChild` or `Update.foldChildStep`. A child-owned view, Command, or Subscription may still construct that child's Messages; the boundary is ownership, not file spelling. See [Informing Submodels](/patterns/informing-submodels) for the complete pattern.
+Rejects constructing a child Message variant from a parent, including through a local `const` alias of the child constructor or namespace. Expose a child-owned update capability that applies the internal fact, then integrate it with `Update.foldChild` or `Update.foldChildStep`. A child-owned view, Command, or Subscription may still construct that child's Messages. The rule cannot infer the origin of an arbitrary prebuilt Message value. See [Informing Submodels](/patterns/informing-submodels) for the complete pattern.
 
 ::Snippet{name="lintNoChildMessageConstructionInRoot" label="foldkit/no-child-message-construction-in-root example"}
+
+### foldkit/no-direct-submodel-state-update {#no-direct-submodel-state-update}
+
+Flags a parent update that uses nested `modifyFields` to change a known Submodel field directly. The child update does not run, so validation, Commands, and OutMessages can be skipped. The rule establishes ownership from a module-scope `Update.foldChild` or `Update.foldChildStep` whose `read` and `write` point to the same field, then checks the parent Model passed through that fold. It leaves an unrelated Model with the same field name, fold `write` callbacks, and child-owned silent `reflect*` helpers alone.
+
+::Snippet{name="lintNoDirectSubmodelStateUpdate" label="foldkit/no-direct-submodel-state-update example"}
+
+### foldkit/require-fold-for-child-update-result {#require-fold-for-child-update-result}
+
+Flags a parent that copies only `.model` from a child helper or update result into its own Model instead of folding the complete result. This can silently discard Commands or an OutMessage. The rule requires an in-file `Update.foldChild` or `Update.foldChildStep` whose `update`, `read`, and `write` establish the child module and field, then follows a local result from that child's helper into the matching `modifyFields` field. The field need not be named after the module: `Products.update(model.productsPage)` is one example. It leaves unrelated helpers, initial Model assembly, fold `write` callbacks, and child-owned silent `reflect*` helpers alone. It does not infer direct helper imports or parent assembly outside `modifyFields`.
+
+::Snippet{name="lintRequireFoldForChildUpdateResult" label="foldkit/require-fold-for-child-update-result example"}
 
 ### foldkit/selection-submodel-factory-at-module-scope {#selection-submodel-factory-at-module-scope}
 

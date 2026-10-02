@@ -447,23 +447,28 @@ const collectExpectationDifferences = (
   }
 }
 
-const builtAssetPath = (): string => {
-  const template = readFileSync(
-    resolve(EXAMPLE_DIR, 'dist/client/index.html'),
-    'utf8',
-  )
-  const source = /<script[^>]+src="([^"]+\.js)"/.exec(template)?.[1]
+const builtAssetPath = async (origin: string): Promise<string> => {
+  const page = await askRaw(origin, {
+    name: 'rendered page',
+    path: '/',
+    method: 'GET',
+    comparedHeaders: [],
+  })
+  if (page.status !== 200) {
+    fail(`the built host answered "/" with ${String(page.status)}, not a page`)
+  }
+  const source = /<script[^>]+src="([^"]+\.js)"/.exec(page.body)?.[1]
   if (source === undefined) {
-    throw new ParityError('the built template did not name a JavaScript asset')
+    throw new ParityError('the rendered page did not name a JavaScript asset')
   }
   if (!source.startsWith('/')) {
-    fail('the built template did not name an absolute-path JavaScript asset')
+    fail('the rendered page did not name an absolute-path JavaScript asset')
   }
   return source
 }
 
 const assertBuiltRequestTargets = async (origin: string): Promise<void> => {
-  const assetPath = builtAssetPath()
+  const assetPath = await builtAssetPath(origin)
   const originForm = await askRaw(origin, {
     name: 'origin-form asset',
     path: assetPath,

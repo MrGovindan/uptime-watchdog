@@ -23,17 +23,18 @@ const localSubscriptions = Subscription.make<Model, Message>()(entry => ({
       }),
       dependenciesToStream: ({ isSystemPreference }) =>
         Stream.when(
-          Stream.fromEventListener<MediaQueryListEvent>(
-            window.matchMedia('(prefers-color-scheme: dark)'),
-            'change',
-          ).pipe(Stream.map(ChangedSystemTheme)),
+          Subscription.fromMediaQuery({
+            query: '(prefers-color-scheme: dark)',
+            mapMatches: isDark =>
+              ChangedSystemTheme({ theme: isDark ? 'Dark' : 'Light' }),
+          }),
           Effect.sync(() => isSystemPreference),
         ),
     },
   ),
 }))
 
-export const subscriptions = Subscription.aggregate<Model, Message>()(
+export const subscriptions = Subscription.aggregate(
   settingsSubscriptions,
   localSubscriptions,
 )

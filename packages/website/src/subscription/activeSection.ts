@@ -137,6 +137,8 @@ export const subscriptions = Subscription.make<Model, Message>()(entry => ({
             UiCheckbox: () => Ui.CheckboxPage.tableOfContents,
             UiRadioGroup: () => Ui.RadioGroupPage.tableOfContents,
             UiSlider: () => Ui.SliderPage.tableOfContents,
+            UiMeter: () => Ui.MeterPage.tableOfContents,
+            UiProgress: () => Ui.ProgressPage.tableOfContents,
             UiSwitch: () => Ui.SwitchPage.tableOfContents,
             UiListbox: () => Ui.ListboxPage.tableOfContents,
             UiCombobox: () => Ui.ComboboxPage.tableOfContents,

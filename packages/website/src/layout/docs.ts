@@ -522,10 +522,6 @@ export const view = (
             viewInputs: {
               slug: exampleSlug,
               isNarrowViewport: model.isNarrowViewport,
-              isShowingChromeHint: Option.contains(
-                model.maybeIsChromium,
-                false,
-              ),
               renderCopyButton,
             },
             toParentMessage: message =>
@@ -949,6 +945,28 @@ export const view = (
           }),
           Ui.SliderPage.tableOfContents,
         ),
+      UiMeter: () =>
+        withTableOfContents(
+          h.submodel({
+            slotId: 'ui-Meter',
+            model: model.uiPages,
+            view: Ui.MeterPage.view,
+            viewInputs: { renderCopyButton, renderHeadingLink },
+            toParentMessage: toUiPageMessage,
+          }),
+          Ui.MeterPage.tableOfContents,
+        ),
+      UiProgress: () =>
+        withTableOfContents(
+          h.submodel({
+            slotId: 'ui-Progress',
+            model: model.uiPages,
+            view: Ui.ProgressPage.view,
+            viewInputs: { renderCopyButton, renderHeadingLink },
+            toParentMessage: toUiPageMessage,
+          }),
+          Ui.ProgressPage.tableOfContents,
+        ),
       UiSwitch: () =>
         withTableOfContents(
           h.submodel({
@@ -1133,7 +1151,12 @@ export const view = (
   )
 
   return h.div(
-    [h.Class('flex flex-col min-h-screen')],
+    [
+      h.Class('flex flex-col min-h-screen'),
+      ...(Option.isSome(model.maybeIsPlaygroundSupported)
+        ? [h.DataAttribute('browser-environment-loaded', '')]
+        : []),
+    ],
     [
       Shared.skipNavLink,
       headerView(model, h),
