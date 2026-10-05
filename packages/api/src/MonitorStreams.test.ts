@@ -1,6 +1,7 @@
 import { MonitorDefinition } from '@uptime-watchdog/common'
 import { describe, expect, it } from '@effect/vitest'
-import { Context, Duration, Effect, Fiber, Layer, Option, Ref, Result, Schema, Stream } from 'effect'
+import { BunFileSystem } from '@effect/platform-bun'
+import { Context, Duration, Effect, Fiber, FileSystem, Layer, Option, Ref, Result, Schema, Stream } from 'effect'
 import { TestClock } from 'effect/testing'
 import * as Database from './Database'
 import * as MonitorRepository from './MonitorRepository'
@@ -117,10 +118,11 @@ describe('MonitorStreams', () => {
     }).pipe(Effect.provide(layers())),
   )
 
-  it.effect('starts streams for monitors saved before startup', () => {
-    const databasePath = `/tmp/opencode/watchdog-${crypto.randomUUID()}.db`
+  it.effect('starts streams for monitors saved before startup', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem
+      const databasePath = yield* fs.makeTempFileScoped({ prefix: 'watchdog-monitor-streams-' })
 
-    return Effect.gen(function* () {
       yield* Effect.scoped(Layer.build(seedMonitor(databasePath)))
 
       return yield* Effect.gen(function* () {
@@ -141,8 +143,8 @@ describe('MonitorStreams', () => {
         expect(observed?.monitor.name).toBe('Prod API')
         expect(Result.isSuccess(observed!.observation.response)).toBe(true)
       }).pipe(Effect.provide(layers(databasePath)))
-    })
-  })
+    }).pipe(Effect.provide(BunFileSystem.layer)),
+  )
 
   it.effect('stops the stream when the monitor is deleted', () =>
     Effect.gen(function* () {
