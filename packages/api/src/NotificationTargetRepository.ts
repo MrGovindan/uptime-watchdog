@@ -4,16 +4,26 @@ import {
   MonitorId,
   NotificationTarget,
   NotificationTargetAlreadyExists,
+  type NotificationWindow,
+  NotificationWindowColumn,
 } from '@uptime-watchdog/common'
 import { Array, Context, Effect, Layer, Option, Schema } from 'effect'
 import { SqlClient, SqlError, SqlSchema } from 'effect/sql'
+
+const columns = 'monitorId, mattermostUserId, mattermostUsername, mattermostDisplayName, window, createdAt'
 
 export interface Interface {
   readonly list: (monitorId: MonitorId) => Effect.Effect<ReadonlyArray<NotificationTarget>>
   readonly add: (
     monitorId: MonitorId,
     user: MattermostUser,
+    window: NotificationWindow | null,
   ) => Effect.Effect<NotificationTarget, NotificationTargetAlreadyExists>
+  readonly setWindow: (
+    monitorId: MonitorId,
+    mattermostUserId: MattermostUserId,
+    window: NotificationWindow | null,
+  ) => Effect.Effect<Option.Option<NotificationTarget>>
   readonly remove: (
     monitorId: MonitorId,
     mattermostUserId: MattermostUserId,
@@ -35,23 +45,27 @@ const make = Effect.gen(function* () {
       Request: Schema.Struct({ monitorId: MonitorId }),
       Result: NotificationTarget,
       execute: ({ monitorId }) => sql`
-        SELECT monitorId, mattermostUserId, mattermostUsername, mattermostDisplayName, createdAt
+        SELECT ${sql.literal(columns)}
         FROM notification_target
         WHERE monitorId = ${monitorId}
         ORDER BY createdAt ASC
       `,
     })({ monitorId }).pipe(Effect.orDie)
 
-  const add = Effect.fn('NotificationTargetRepository.add')(function* (monitorId: MonitorId, user: MattermostUser) {
+  const add = Effect.fn('NotificationTargetRepository.add')(function* (
+    monitorId: MonitorId,
+    user: MattermostUser,
+    window: NotificationWindow | null,
+  ) {
     const rows = yield* SqlSchema.findAll({
       Request: NotificationTarget.insert,
       Result: NotificationTarget,
-      execute: ({ monitorId, mattermostUserId, mattermostUsername, mattermostDisplayName, createdAt }) => sql`
+      execute: ({ monitorId, mattermostUserId, mattermostUsername, mattermostDisplayName, window, createdAt }) => sql`
         INSERT INTO notification_target
-          (monitorId, mattermostUserId, mattermostUsername, mattermostDisplayName, createdAt)
+          (monitorId, mattermostUserId, mattermostUsername, mattermostDisplayName, window, createdAt)
         VALUES
-          (${monitorId}, ${mattermostUserId}, ${mattermostUsername}, ${mattermostDisplayName}, ${createdAt})
-        RETURNING monitorId, mattermostUserId, mattermostUsername, mattermostDisplayName, createdAt
+          (${monitorId}, ${mattermostUserId}, ${mattermostUsername}, ${mattermostDisplayName}, ${window}, ${createdAt})
+        RETURNING ${sql.literal(columns)}
       `,
     })(
       NotificationTarget.insert.make({
@@ -59,6 +73,7 @@ const make = Effect.gen(function* () {
         mattermostUserId: user.id,
         mattermostUsername: user.username,
         mattermostDisplayName: user.displayName,
+        window,
       }),
     ).pipe(
       Effect.catchTags({
@@ -76,6 +91,26 @@ const make = Effect.gen(function* () {
     })
   })
 
+  const setWindow = (
+    monitorId: MonitorId,
+    mattermostUserId: MattermostUserId,
+    window: NotificationWindow | null,
+  ): Effect.Effect<Option.Option<NotificationTarget>> =>
+    SqlSchema.findOneOption({
+      Request: Schema.Struct({
+        monitorId: MonitorId,
+        mattermostUserId: MattermostUserId,
+        window: NotificationWindowColumn,
+      }),
+      Result: NotificationTarget,
+      execute: ({ monitorId, mattermostUserId, window }) => sql`
+        UPDATE notification_target
+        SET window = ${window}
+        WHERE monitorId = ${monitorId} AND mattermostUserId = ${mattermostUserId}
+        RETURNING ${sql.literal(columns)}
+      `,
+    })({ monitorId, mattermostUserId, window }).pipe(Effect.orDie)
+
   const remove = (
     monitorId: MonitorId,
     mattermostUserId: MattermostUserId,
@@ -86,11 +121,11 @@ const make = Effect.gen(function* () {
       execute: ({ monitorId, mattermostUserId }) => sql`
         DELETE FROM notification_target
         WHERE monitorId = ${monitorId} AND mattermostUserId = ${mattermostUserId}
-        RETURNING monitorId, mattermostUserId, mattermostUsername, mattermostDisplayName, createdAt
+        RETURNING ${sql.literal(columns)}
       `,
     })({ monitorId, mattermostUserId }).pipe(Effect.orDie)
 
-  return { list, add, remove } satisfies Interface
+  return { list, add, setWindow, remove } satisfies Interface
 })
 
 export const layer = Layer.effect(NotificationTargetRepository, make)

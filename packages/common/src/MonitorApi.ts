@@ -1,14 +1,13 @@
 import { Schema } from 'effect'
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from 'effect/http-api'
-import {
-  MattermostTestDefinition,
-  MattermostUser,
-  MattermostUserId,
-  MattermostUserSearchDefinition,
-} from './Mattermost'
+import { MattermostUser, MattermostUserId, MattermostUserSearchDefinition } from './Mattermost'
 import { Monitor, MonitorDefinition, MonitorId } from './Monitor'
 import { MonitorHealth, MonitorWithHealth } from './MonitorHealth'
-import { NotificationTarget, NotificationTargetDefinition } from './NotificationTarget'
+import {
+  NotificationTarget,
+  NotificationTargetDefinition,
+  NotificationTargetWindowDefinition,
+} from './NotificationTarget'
 import { CronDescription, CronExpression } from './Uptime'
 
 export class MonitorNotFound extends Schema.TaggedError<MonitorNotFound>()(
@@ -28,6 +27,16 @@ export class NotificationTargetAlreadyExists extends Schema.TaggedError<Notifica
 ) {
   override get message(): string {
     return `Mattermost user ${this.mattermostUserId} is already a notification target for this monitor`
+  }
+}
+
+export class NotificationTargetNotFound extends Schema.TaggedError<NotificationTargetNotFound>()(
+  'NotificationTargetNotFound',
+  { monitorId: MonitorId, mattermostUserId: MattermostUserId },
+  { httpApiStatus: 404 },
+) {
+  override get message(): string {
+    return `Mattermost user ${this.mattermostUserId} is not a notification target for this monitor`
   }
 }
 
@@ -115,6 +124,12 @@ export const Api = HttpApi.make('UptimeWatchdog')
         success: NotificationTarget.json.pipe(HttpApiSchema.status(201)),
         error: [MonitorNotFound, NotificationTargetAlreadyExists, MattermostUserNotFound, MattermostUnavailable],
       }),
+      HttpApiEndpoint.put('updateNotificationTarget', '/monitor/:monitorId/notification-target/:mattermostUserId', {
+        params: { monitorId: MonitorId, mattermostUserId: MattermostUserId },
+        payload: NotificationTargetWindowDefinition,
+        success: NotificationTarget.json,
+        error: [MonitorNotFound, NotificationTargetNotFound],
+      }),
       HttpApiEndpoint.delete('removeNotificationTarget', '/monitor/:monitorId/notification-target/:mattermostUserId', {
         params: { monitorId: MonitorId, mattermostUserId: MattermostUserId },
         success: HttpApiSchema.NoContent,
@@ -137,11 +152,6 @@ export const Api = HttpApi.make('UptimeWatchdog')
         payload: MattermostUserSearchDefinition,
         success: Schema.Array(MattermostUser),
         error: MattermostUnavailable,
-      }),
-      HttpApiEndpoint.post('sendMattermostTest', '/notification/mattermost/test', {
-        payload: MattermostTestDefinition,
-        success: HttpApiSchema.NoContent,
-        error: [MonitorNotFound, MattermostUserNotFound, MattermostUnavailable],
       }),
     ),
   )

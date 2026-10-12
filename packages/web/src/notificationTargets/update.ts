@@ -1,6 +1,11 @@
-import { type NotificationTarget } from '@uptime-watchdog/common'
+import {
+  type NotificationTarget,
+  NotificationWindowDefinition,
+  WEEKDAY_NAMES,
+  type Weekday,
+} from '@uptime-watchdog/common'
 import { Dialog } from '@foldkit/ui'
-import { Array, Number, Option } from 'effect'
+import { Array, Number, Option, Schema } from 'effect'
 import { AsyncData, Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
@@ -10,15 +15,19 @@ import {
   LoadNotificationTargets,
   RemoveNotificationTarget,
   SearchMattermostUsers,
-  SendTestNotification,
+  UpdateNotificationTargetWindow,
 } from './command'
-import { Message, OutMessage } from './message'
-import { Model, type OpenInput, SearchState, TargetsAsyncData } from './model'
+import { Message } from './message'
+import { Model, type OpenInput, SearchState, TargetsAsyncData, type WindowEditor } from './model'
 
-export type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage, ApiClient>
+export type UpdateReturn = Update.Return<Model, Message, ApiClient>
 export type InitReturn = Update.Return<Model, Message>
 
 const MIN_SEARCH_LENGTH = 2
+
+const DEFAULT_WINDOW_START_TIME = '09:00'
+const DEFAULT_WINDOW_END_TIME = '17:00'
+const WINDOW_INVALID_ERROR = 'Select at least one day and choose different start and end times.'
 
 export const init = (): InitReturn => ({
   model: {
@@ -29,6 +38,7 @@ export const init = (): InitReturn => ({
     searchTerm: '',
     searchVersion: 0,
     searchState: SearchState.Idle(),
+    windowEditor: Option.none(),
     maybeError: Option.none(),
   },
 })
@@ -41,6 +51,7 @@ const resetSession = (model: Model): Model =>
     searchTerm: () => '',
     searchVersion: () => 0,
     searchState: () => SearchState.Idle(),
+    windowEditor: () => Option.none(),
     maybeError: () => Option.none(),
   })
 
@@ -87,6 +98,52 @@ const removeTarget = (targets: Model['targets'], mattermostUserId: string): Mode
   })
 }
 
+const replaceTarget = (targets: Model['targets'], updated: NotificationTarget): Model['targets'] => {
+  if (!AsyncData.hasData(targets)) {
+    return targets
+  }
+
+  const existing = Option.getOrElse(AsyncData.getData(targets), () => [])
+
+  return TargetsAsyncData.Success({
+    data: Array.map(existing, (target) => (target.mattermostUserId === updated.mattermostUserId ? updated : target)),
+  })
+}
+
+const seedWindowEditor = (target: NotificationTarget): WindowEditor => {
+  if (target.window === null) {
+    return {
+      mattermostUserId: target.mattermostUserId,
+      days: WEEKDAY_NAMES,
+      startTime: DEFAULT_WINDOW_START_TIME,
+      endTime: DEFAULT_WINDOW_END_TIME,
+      timezone: '',
+    }
+  }
+
+  return {
+    mattermostUserId: target.mattermostUserId,
+    days: target.window.days,
+    startTime: target.window.startTime,
+    endTime: target.window.endTime,
+    timezone: target.window.timezone,
+  }
+}
+
+const toWindowDefinition = (editor: WindowEditor): Option.Option<NotificationWindowDefinition> =>
+  Schema.decodeUnknownOption(NotificationWindowDefinition)({
+    ...(editor.timezone.trim() === '' ? {} : { timezone: editor.timezone.trim() }),
+    days: editor.days,
+    startTime: editor.startTime,
+    endTime: editor.endTime,
+  })
+
+const setWindowEditor = (model: Model, editor: WindowEditor): Model =>
+  modifyFields(model, { windowEditor: () => Option.some(editor) })
+
+const toggleDay = (days: ReadonlyArray<Weekday>, day: Weekday): ReadonlyArray<Weekday> =>
+  Array.contains(days, day) ? Array.filter(days, (candidate) => candidate !== day) : Array.append(days, day)
+
 export const open = (model: Model, input: OpenInput): UpdateReturn =>
   Update.combine(model, [
     foldDialogOpen,
@@ -98,6 +155,7 @@ export const open = (model: Model, input: OpenInput): UpdateReturn =>
         searchTerm: () => '',
         searchVersion: () => 0,
         searchState: () => SearchState.Idle(),
+        windowEditor: () => Option.none(),
         maybeError: () => Option.none(),
       }),
       commands: [LoadNotificationTargets({ monitorId: input.monitorId })],
@@ -215,23 +273,111 @@ export const update = (model: Model, message: Message) =>
       model: modifyFields(model, { maybeError: () => Option.some(error) }),
     }),
 
-    ClickedSendTest: ({ mattermostUserId }) => ({
-      model: modifyFields(model, { maybeError: () => Option.none() }),
-      commands: [
-        SendTestNotification({
-          monitorId: Option.getOrUndefined(model.maybeMonitorId),
-          mattermostUserId,
+    ClickedEditNotificationWindow: ({ target }) => ({
+      model: modifyFields(model, {
+        windowEditor: () => Option.some(seedWindowEditor(target)),
+        maybeError: () => Option.none(),
+      }),
+    }),
+
+    ClosedNotificationWindowEditor: () => ({
+      model: modifyFields(model, {
+        windowEditor: () => Option.none(),
+        maybeError: () => Option.none(),
+      }),
+    }),
+
+    ToggledNotificationWindowDay: ({ day }) => {
+      if (Option.isNone(model.windowEditor)) {
+        return { model }
+      }
+
+      const editor = model.windowEditor.value
+
+      return {
+        model: setWindowEditor(model, {
+          ...editor,
+          days: toggleDay(editor.days, day),
         }),
-      ],
+      }
+    },
+
+    UpdatedNotificationWindowStartTime: ({ value }) => {
+      if (Option.isNone(model.windowEditor)) {
+        return { model }
+      }
+
+      return { model: setWindowEditor(model, { ...model.windowEditor.value, startTime: value }) }
+    },
+
+    UpdatedNotificationWindowEndTime: ({ value }) => {
+      if (Option.isNone(model.windowEditor)) {
+        return { model }
+      }
+
+      return { model: setWindowEditor(model, { ...model.windowEditor.value, endTime: value }) }
+    },
+
+    UpdatedNotificationWindowTimezone: ({ value }) => {
+      if (Option.isNone(model.windowEditor)) {
+        return { model }
+      }
+
+      return { model: setWindowEditor(model, { ...model.windowEditor.value, timezone: value }) }
+    },
+
+    ClickedSaveNotificationWindow: () => {
+      if (Option.isNone(model.windowEditor) || Option.isNone(model.maybeMonitorId)) {
+        return { model }
+      }
+
+      const editor = model.windowEditor.value
+      const maybeWindow = toWindowDefinition(editor)
+
+      if (Option.isNone(maybeWindow)) {
+        return { model: modifyFields(model, { maybeError: () => Option.some(WINDOW_INVALID_ERROR) }) }
+      }
+
+      return {
+        model: modifyFields(model, { maybeError: () => Option.none() }),
+        commands: [
+          UpdateNotificationTargetWindow({
+            monitorId: model.maybeMonitorId.value,
+            mattermostUserId: editor.mattermostUserId,
+            window: maybeWindow.value,
+          }),
+        ],
+      }
+    },
+
+    ClickedClearNotificationWindow: () => {
+      if (Option.isNone(model.windowEditor) || Option.isNone(model.maybeMonitorId)) {
+        return { model }
+      }
+
+      const editor = model.windowEditor.value
+
+      return {
+        model: modifyFields(model, { maybeError: () => Option.none() }),
+        commands: [
+          UpdateNotificationTargetWindow({
+            monitorId: model.maybeMonitorId.value,
+            mattermostUserId: editor.mattermostUserId,
+            window: null,
+          }),
+        ],
+      }
+    },
+
+    CompletedUpdateNotificationTargetWindow: ({ target }) => ({
+      model: modifyFields(model, {
+        targets: () => replaceTarget(model.targets, target),
+        windowEditor: () => Option.none(),
+        maybeError: () => Option.none(),
+      }),
     }),
 
-    CompletedSendTestNotification: () => ({
-      model,
-      outMessage: OutMessage.SentTestNotification(),
-    }),
-
-    FailedSendTestNotification: ({ error }) => ({
-      model,
-      outMessage: OutMessage.FailedTestNotification({ message: error }),
+    FailedUpdateNotificationTargetWindow: ({ error }) => ({
+      model: modifyFields(model, { maybeError: () => Option.some(error) }),
     }),
   })

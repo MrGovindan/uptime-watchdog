@@ -1,4 +1,4 @@
-import { MattermostUser, MonitorId, MonitorName, NotificationTarget } from '@uptime-watchdog/common'
+import { MattermostUser, MonitorId, MonitorName, NotificationTarget, Weekday } from '@uptime-watchdog/common'
 import { Dialog } from '@foldkit/ui'
 import { Schema } from 'effect'
 import { AsyncData } from 'foldkit'
@@ -16,6 +16,15 @@ export const SearchState = defineTaggedUnion({
 })
 export type SearchState = typeof SearchState.Type
 
+export const WindowEditor = Schema.Struct({
+  mattermostUserId: Schema.String,
+  days: Schema.Array(Weekday),
+  startTime: Schema.String,
+  endTime: Schema.String,
+  timezone: Schema.String,
+})
+export type WindowEditor = typeof WindowEditor.Type
+
 export const Model = Schema.Struct({
   dialog: Dialog.Model,
   maybeMonitorId: Schema.Option(MonitorId),
@@ -24,6 +33,7 @@ export const Model = Schema.Struct({
   searchTerm: Schema.String,
   searchVersion: Schema.Number,
   searchState: SearchState,
+  windowEditor: Schema.Option(WindowEditor),
   maybeError: Schema.Option(Schema.String),
 })
 export type Model = typeof Model.Type

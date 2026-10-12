@@ -38,12 +38,6 @@ export const mattermostUser: MattermostUser = {
   displayName: 'Jesse Duffield',
 }
 
-export const botUser: MattermostUser = {
-  id: 'mm-bot',
-  username: 'watchdog',
-  displayName: 'Watchdog',
-}
-
 export const mattermostStub = (overrides: Partial<MattermostInterface> = {}): Layer.Layer<Mattermost> => {
   const users = new Map([[mattermostUser.id, mattermostUser]])
 
@@ -73,6 +67,7 @@ export const checkUptimeStub = (observe?: CheckUptime.Interface): Layer.Layer<Ch
 export interface TestSeams {
   readonly databasePath?: string
   readonly staticRoot?: string
+  readonly timezone?: string
   readonly checkUptime?: CheckUptime.Interface
   readonly mattermost?: Partial<MattermostInterface>
   readonly cronConversion?: Partial<CronConversionInterface>
@@ -82,6 +77,7 @@ export const watchdogLayer = (seams: TestSeams = {}) =>
   Watchdog.layer({
     databasePath: seams.databasePath ?? ':memory:',
     staticRoot: seams.staticRoot ?? process.cwd(),
+    timezone: seams.timezone,
   }).pipe(
     Layer.provide(checkUptimeStub(seams.checkUptime)),
     Layer.provide(mattermostStub(seams.mattermost)),

@@ -11,7 +11,6 @@ import { Cron, Effect, Option, Ref, Schema } from 'effect'
 import { HttpRouter } from 'effect/http'
 import type { Interface as CheckUptimeInterface } from './CheckUptime'
 import {
-  botUser,
   definitionJson,
   mattermostUser,
   observation,
@@ -329,6 +328,140 @@ describe('notification targets', () => {
       }),
     ),
   )
+  it.effect('stores and returns a window when adding a target', () =>
+    Effect.gen(function* () {
+      const { monitor } = yield* client()
+
+      const created = yield* monitor.register({ payload: definition })
+      const target = yield* monitor.addNotificationTarget({
+        params: { monitorId: created.id },
+        payload: {
+          mattermostUserId: mattermostUser.id,
+          window: { days: ['Monday'], startTime: '09:00', endTime: '17:00' },
+        },
+      })
+
+      expect(target.window).toEqual({
+        timezone: 'UTC',
+        days: ['Monday'],
+        startTime: '09:00',
+        endTime: '17:00',
+      })
+    }),
+  )
+
+  it.effect('defaults a window without a time zone to the server time zone', () =>
+    Effect.gen(function* () {
+      const { monitor } = yield* client({ timezone: 'America/New_York' })
+
+      const created = yield* monitor.register({ payload: definition })
+      const target = yield* monitor.addNotificationTarget({
+        params: { monitorId: created.id },
+        payload: {
+          mattermostUserId: mattermostUser.id,
+          window: { days: ['Monday'], startTime: '09:00', endTime: '17:00' },
+        },
+      })
+
+      expect(target.window?.timezone).toBe('America/New_York')
+    }),
+  )
+
+  it.effect('updates and clears a target window', () =>
+    Effect.gen(function* () {
+      const { monitor } = yield* client()
+
+      const created = yield* monitor.register({ payload: definition })
+      yield* monitor.addNotificationTarget({
+        params: { monitorId: created.id },
+        payload: { mattermostUserId: mattermostUser.id },
+      })
+
+      const updated = yield* monitor.updateNotificationTarget({
+        params: { monitorId: created.id, mattermostUserId: mattermostUser.id },
+        payload: {
+          window: {
+            timezone: 'UTC',
+            days: ['Saturday'],
+            startTime: '22:00',
+            endTime: '06:00',
+          },
+        },
+      })
+      expect(updated.window).toEqual({
+        timezone: 'UTC',
+        days: ['Saturday'],
+        startTime: '22:00',
+        endTime: '06:00',
+      })
+
+      const cleared = yield* monitor.updateNotificationTarget({
+        params: { monitorId: created.id, mattermostUserId: mattermostUser.id },
+        payload: { window: null },
+      })
+      expect(cleared.window).toBeNull()
+    }),
+  )
+
+  it.effect('rejects an invalid window with 400', () =>
+    withWebHandler(watchdogLayer(), (handler) =>
+      Effect.gen(function* () {
+        const monitorId = yield* registerViaHttp(handler)
+        yield* request(
+          handler,
+          `/monitor/${monitorId}/notification-target`,
+          json({ mattermostUserId: mattermostUser.id }),
+        )
+
+        const bodies = [
+          { window: { days: [], startTime: '09:00', endTime: '17:00' } },
+          { window: { days: ['Monday'], startTime: '09:00', endTime: '09:00' } },
+          { window: { days: ['Notaday'], startTime: '09:00', endTime: '17:00' } },
+          { window: { days: ['Monday'], startTime: '25:00', endTime: '17:00' } },
+          { window: { timezone: 'Mars/Olympus', days: ['Monday'], startTime: '09:00', endTime: '17:00' } },
+        ]
+
+        for (const body of bodies) {
+          const response = yield* request(handler, `/monitor/${monitorId}/notification-target/${mattermostUser.id}`, {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+
+          expect(response.status).toBe(400)
+        }
+      }),
+    ),
+  )
+
+  it.effect('rejects updating a window of an unknown target with 404', () =>
+    withWebHandler(watchdogLayer(), (handler) =>
+      Effect.gen(function* () {
+        const monitorId = yield* registerViaHttp(handler)
+        const response = yield* request(handler, `/monitor/${monitorId}/notification-target/mm-missing`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ window: null }),
+        })
+
+        expect(response.status).toBe(404)
+      }),
+    ),
+  )
+
+  it.effect('rejects updating a window on an unknown monitor with 404', () =>
+    withWebHandler(watchdogLayer(), (handler) =>
+      Effect.gen(function* () {
+        const response = yield* request(
+          handler,
+          `/monitor/00000000-0000-4000-8000-000000000000/notification-target/${mattermostUser.id}`,
+          { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ window: null }) },
+        )
+
+        expect(response.status).toBe(404)
+      }),
+    ),
+  )
 })
 
 describe('monitor deletion', () => {
@@ -385,31 +518,6 @@ describe('mattermost notification endpoints', () => {
       }),
     ),
   )
-
-  it.effect('sends a test direct message', () => {
-    const sent = Effect.runSync(Ref.make<ReadonlyArray<Readonly<{ userId: string; message: string }>>>([]))
-
-    return Effect.gen(function* () {
-      const { notification } = yield* client({
-        mattermost: {
-          getUser: () => Effect.succeed(botUser),
-          sendDirectMessage: (userId, message) => Ref.update(sent, (entries) => [...entries, { userId, message }]),
-        },
-      })
-
-      yield* notification.sendMattermostTest({
-        payload: { mattermostUserId: botUser.id },
-      })
-
-      const messages = yield* Ref.get(sent)
-      expect(messages).toEqual([
-        {
-          userId: botUser.id,
-          message: 'This is a test notification from Uptime Watchdog.',
-        },
-      ])
-    })
-  })
 })
 
 describe('monitor health', () => {
@@ -594,18 +702,6 @@ describe('monitor health', () => {
 })
 
 describe('mattermost extra notification endpoints', () => {
-  it.effect('surfaces a mattermost user that does not exist', () =>
-    Effect.gen(function* () {
-      const { notification } = yield* client()
-
-      const error = yield* notification
-        .sendMattermostTest({ payload: { mattermostUserId: 'mm-missing' } })
-        .pipe(Effect.flip)
-
-      expect(error).toMatchObject({ _tag: 'MattermostUserNotFound' })
-    }),
-  )
-
   it.effect('surfaces mattermost being unavailable', () =>
     Effect.gen(function* () {
       const { notification } = yield* client({

@@ -1,3 +1,4 @@
+import { NOTIFICATION_WINDOW_DEFAULT_TIMEZONE } from '@uptime-watchdog/common'
 import { Config } from 'effect'
 
 export const staticRoot = Config.String('STATIC_ROOT').pipe(Config.withDefault(`${import.meta.dir}/../../web/dist`))
@@ -16,6 +17,8 @@ export const openCodeApiKey = Config.Redacted('OPENCODE_API_KEY')
 
 export const openCodeUrl = Config.URL('OPENCODE_URL')
 
+export const timezone = Config.String('TIMEZONE').pipe(Config.withDefault(NOTIFICATION_WINDOW_DEFAULT_TIMEZONE))
+
 export const OpenCode = Config.all({
   apiKey: openCodeApiKey,
   model: openCodeModel,
@@ -26,6 +29,7 @@ export const Server = Config.all({
   staticRoot,
   port,
   databasePath,
+  timezone,
 })
 
 export const Mattermost = Config.all({

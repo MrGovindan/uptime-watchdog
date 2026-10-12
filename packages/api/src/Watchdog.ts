@@ -1,3 +1,4 @@
+import { NOTIFICATION_WINDOW_DEFAULT_TIMEZONE } from '@uptime-watchdog/common'
 import { Effect, Layer, Stream } from 'effect'
 import { HttpStaticServer } from 'effect/http'
 import * as Database from './Database'
@@ -14,6 +15,7 @@ import * as WatchdogRpc from './WatchdogRpc'
 export interface Options {
   readonly databasePath: string
   readonly staticRoot: string
+  readonly timezone?: string
 }
 
 export const layer = (options: Options) => {
@@ -24,7 +26,11 @@ export const layer = (options: Options) => {
   const streams = MonitorStreams.layer.pipe(Layer.provide(events), Layer.provide(monitors))
   const health = MonitorHealth.layer.pipe(Layer.provide(streams), Layer.provide(events))
   const worker = NotificationWorker.layer.pipe(Layer.provide(events), Layer.provide(targets))
-  const directory = MonitorDirectory.layer.pipe(Layer.provide(monitors), Layer.provide(targets), Layer.provide(events))
+  const directory = MonitorDirectory.layer(options.timezone ?? NOTIFICATION_WINDOW_DEFAULT_TIMEZONE).pipe(
+    Layer.provide(monitors),
+    Layer.provide(targets),
+    Layer.provide(events),
+  )
   const services = Layer.mergeAll(events, monitors, targets, streams, health, worker, directory)
 
   const observability = Layer.effectDiscard(

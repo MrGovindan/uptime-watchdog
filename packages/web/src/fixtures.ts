@@ -103,6 +103,7 @@ const notificationTarget: NotificationTarget = {
   mattermostUserId: 'mm-jesse',
   mattermostUsername: 'jesse',
   mattermostDisplayName: 'Jesse Duffield',
+  window: null,
   createdAt: DateTime.nowUnsafe(),
 }
 

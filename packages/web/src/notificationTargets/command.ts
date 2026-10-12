@@ -1,4 +1,4 @@
-import { MonitorId } from '@uptime-watchdog/common'
+import { MonitorId, NotificationWindowDefinition } from '@uptime-watchdog/common'
 import { Duration, Effect, Schema } from 'effect'
 import { Command } from 'foldkit'
 
@@ -67,20 +67,24 @@ export const RemoveNotificationTarget = Command.define('RemoveNotificationTarget
     ),
 })
 
-export const SendTestNotification = Command.define('SendTestNotification', {
-  args: { monitorId: Schema.optional(MonitorId), mattermostUserId: Schema.String },
-  messages: [Message.CompletedSendTestNotification, Message.FailedSendTestNotification],
-  execute: ({ monitorId, mattermostUserId }) =>
+export const UpdateNotificationTargetWindow = Command.define('UpdateNotificationTargetWindow', {
+  args: {
+    monitorId: MonitorId,
+    mattermostUserId: Schema.String,
+    window: Schema.NullOr(NotificationWindowDefinition),
+  },
+  messages: [Message.CompletedUpdateNotificationTargetWindow, Message.FailedUpdateNotificationTargetWindow],
+  execute: ({ monitorId, mattermostUserId, window }) =>
     Effect.gen(function* () {
       const client = yield* ApiClient
-      yield* client.notification.sendMattermostTest({
-        payload: {
-          mattermostUserId,
-          ...(monitorId === undefined ? {} : { monitorId }),
-        },
+      const target = yield* client.monitor.updateNotificationTarget({
+        params: { monitorId, mattermostUserId },
+        payload: { window },
       })
-      return Message.CompletedSendTestNotification()
+      return Message.CompletedUpdateNotificationTargetWindow({ target })
     }).pipe(
-      Effect.catch((error) => Effect.succeed(Message.FailedSendTestNotification({ error: describeError(error) }))),
+      Effect.catch((error) =>
+        Effect.succeed(Message.FailedUpdateNotificationTargetWindow({ error: describeError(error) })),
+      ),
     ),
 })

@@ -191,24 +191,11 @@ const writeNotificationTargets = (model: Model, nextNotificationTargets: Notific
 const toNotificationTargetsMessage = (message: NotificationTargets.Message): Message =>
   Message.GotNotificationTargetsMessage({ message })
 
-const foldNotificationTargetsOutMessage = NotificationTargets.OutMessage.match<Update.Step<Model, Message>>({
-  SentTestNotification: () => (stepModel) =>
-    foldShowToast(stepModel, {
-      variant: 'Success',
-      payload: { message: 'Test notification sent' },
-    }),
-  FailedTestNotification:
-    ({ message }) =>
-    (stepModel) =>
-      foldShowToast(stepModel, { variant: 'Error', payload: { message } }),
-})
-
 export const foldNotificationTargets = Update.foldChild({
   update: NotificationTargets.update,
   read: readNotificationTargets,
   write: writeNotificationTargets,
   toParentMessage: toNotificationTargetsMessage,
-  foldOutMessage: foldNotificationTargetsOutMessage,
 })
 
 export const foldOpenNotificationTargets = Update.foldChild({
@@ -217,5 +204,4 @@ export const foldOpenNotificationTargets = Update.foldChild({
   read: readNotificationTargets,
   write: writeNotificationTargets,
   toParentMessage: toNotificationTargetsMessage,
-  foldOutMessage: foldNotificationTargetsOutMessage,
 })

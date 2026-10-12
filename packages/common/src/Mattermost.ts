@@ -20,8 +20,3 @@ export const MattermostUserSearchDefinition = Schema.Struct({
   term: MattermostSearchTerm,
 })
 export type MattermostUserSearchDefinition = typeof MattermostUserSearchDefinition.Type
-
-export const MattermostTestDefinition = Schema.Struct({
-  mattermostUserId: MattermostUserId,
-})
-export type MattermostTestDefinition = typeof MattermostTestDefinition.Type

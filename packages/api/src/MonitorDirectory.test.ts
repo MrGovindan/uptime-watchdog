@@ -75,7 +75,7 @@ describe('MonitorDirectory', () => {
       Effect.gen(function* () {
         const created = yield* directory.register(definition)
         yield* Queue.take(received)
-        const target = yield* directory.addTarget(created.id, mattermostUser.id)
+        const target = yield* directory.addTarget(created.id, { mattermostUserId: mattermostUser.id })
         yield* Queue.take(received)
 
         yield* directory.delete(created.id)
@@ -105,7 +105,7 @@ describe('MonitorDirectory', () => {
         const created = yield* directory.register(definition)
         yield* Queue.take(received)
 
-        const target = yield* directory.addTarget(created.id, mattermostUser.id)
+        const target = yield* directory.addTarget(created.id, { mattermostUserId: mattermostUser.id })
 
         expect(target).toMatchObject({
           mattermostUserId: 'mm-jesse',
@@ -124,7 +124,9 @@ describe('MonitorDirectory', () => {
   it.effect('addTarget rejects an unknown monitor with MonitorNotFound', () =>
     withDirectory(({ directory }) =>
       Effect.gen(function* () {
-        const error = yield* directory.addTarget(unknownMonitorId, mattermostUser.id).pipe(Effect.flip)
+        const error = yield* directory
+          .addTarget(unknownMonitorId, { mattermostUserId: mattermostUser.id })
+          .pipe(Effect.flip)
 
         expect(error).toMatchObject({ _tag: 'MonitorNotFound' })
       }),
@@ -136,7 +138,7 @@ describe('MonitorDirectory', () => {
       Effect.gen(function* () {
         const created = yield* directory.register(definition)
         yield* Queue.take(received)
-        yield* directory.addTarget(created.id, mattermostUser.id)
+        yield* directory.addTarget(created.id, { mattermostUserId: mattermostUser.id })
         yield* Queue.take(received)
 
         yield* directory.removeTarget(created.id, mattermostUser.id)

@@ -1,4 +1,4 @@
-import { MattermostUser, NotificationTarget } from '@uptime-watchdog/common'
+import { MattermostUser, NotificationTarget, Weekday } from '@uptime-watchdog/common'
 import { Dialog } from '@foldkit/ui'
 import { Schema } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
@@ -29,14 +29,15 @@ export const Message = defineMessageUnion({
   CompletedRemoveNotificationTarget: { mattermostUserId: Schema.String },
   FailedRemoveNotificationTarget: { error: Schema.String },
 
-  ClickedSendTest: { mattermostUserId: Schema.String },
-  CompletedSendTestNotification: {},
-  FailedSendTestNotification: { error: Schema.String },
+  ClickedEditNotificationWindow: { target: NotificationTarget },
+  ClosedNotificationWindowEditor: {},
+  ToggledNotificationWindowDay: { day: Weekday },
+  UpdatedNotificationWindowStartTime: { value: Schema.String },
+  UpdatedNotificationWindowEndTime: { value: Schema.String },
+  UpdatedNotificationWindowTimezone: { value: Schema.String },
+  ClickedSaveNotificationWindow: {},
+  ClickedClearNotificationWindow: {},
+  CompletedUpdateNotificationTargetWindow: { target: NotificationTarget },
+  FailedUpdateNotificationTargetWindow: { error: Schema.String },
 })
 export type Message = typeof Message.Type
-
-export const OutMessage = defineMessageUnion({
-  SentTestNotification: {},
-  FailedTestNotification: { message: Schema.String },
-})
-export type OutMessage = typeof OutMessage.Type

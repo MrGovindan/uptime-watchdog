@@ -6,7 +6,6 @@ import { MonitorDirectory } from './MonitorDirectory'
 import { MonitorRepository } from './MonitorRepository'
 import { MonitorHealth } from './MonitorHealth'
 import { MonitorStreams } from './MonitorStreams'
-import * as NotificationMessages from './NotificationMessages'
 import { ScheduleGroupLive } from './ScheduleApi'
 
 export const MonitorGroupLive = HttpApiBuilder.group(Api, 'monitor', (handlers) =>
@@ -43,8 +42,10 @@ export const MonitorGroupLive = HttpApiBuilder.group(Api, 'monitor', (handlers) 
 
       .handle('listNotificationTargets', ({ params }) => directory.listTargets(params.monitorId))
 
-      .handle('addNotificationTarget', ({ params, payload }) =>
-        directory.addTarget(params.monitorId, payload.mattermostUserId),
+      .handle('addNotificationTarget', ({ params, payload }) => directory.addTarget(params.monitorId, payload))
+
+      .handle('updateNotificationTarget', ({ params, payload }) =>
+        directory.updateTargetWindow(params.monitorId, params.mattermostUserId, payload.window),
       )
 
       .handle('removeNotificationTarget', ({ params }) =>
@@ -57,11 +58,7 @@ export const NotificationGroupLive = HttpApiBuilder.group(Api, 'notification', (
   Effect.gen(function* () {
     const mattermost = yield* Mattermost
 
-    return handlers
-      .handle('searchMattermostUsers', ({ payload }) => mattermost.searchUsers(payload.term))
-      .handle('sendMattermostTest', ({ payload }) =>
-        mattermost.sendDirectMessage(payload.mattermostUserId, NotificationMessages.testForMonitor()),
-      )
+    return handlers.handle('searchMattermostUsers', ({ payload }) => mattermost.searchUsers(payload.term))
   }),
 )
 

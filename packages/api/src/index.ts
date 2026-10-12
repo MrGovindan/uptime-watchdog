@@ -10,7 +10,7 @@ import * as Watchdog from './Watchdog'
 
 const application = Layer.unwrap(
   Effect.gen(function* () {
-    const { port, staticRoot, databasePath } = yield* AppConfig.Server
+    const { port, staticRoot, databasePath, timezone } = yield* AppConfig.Server
     const mattermostConfig = yield* AppConfig.Mattermost
     const openCode = yield* AppConfig.OpenCode
 
@@ -37,7 +37,7 @@ const application = Layer.unwrap(
     const mattermost = Mattermost.layer(mattermostConfig)
     const cronConversion = CronConversion.layer.pipe(Layer.provide(lm), Layer.provide(BunHttpClient.layer))
 
-    return HttpRouter.serve(Watchdog.layer({ databasePath, staticRoot })).pipe(
+    return HttpRouter.serve(Watchdog.layer({ databasePath, staticRoot, timezone })).pipe(
       Layer.provide(Layer.mergeAll(checkUptime, mattermost, cronConversion)),
       Layer.provide(BunHttpServer.layer({ port })),
     )

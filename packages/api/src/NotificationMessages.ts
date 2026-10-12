@@ -14,5 +14,3 @@ export const monitorDegraded = (monitorName: MonitorName): string =>
 
 export const monitorHealed = (monitorName: MonitorName): string =>
   `Monitor "${monitorName}" has healed and is responding as expected again.`
-
-export const testForMonitor = (): string => 'This is a test notification from Uptime Watchdog.'
