@@ -1,6 +1,8 @@
 import {
   type NotificationTarget,
   NotificationWindowDefinition,
+  TIMEZONE_INVALID_MESSAGE,
+  Timezone,
   WEEKDAY_NAMES,
   type Weekday,
 } from '@uptime-watchdog/common'
@@ -18,7 +20,7 @@ import {
   UpdateNotificationTargetWindow,
 } from './command'
 import { Message } from './message'
-import { Model, type OpenInput, SearchState, TargetsAsyncData, type WindowEditor } from './model'
+import { detectTimezone, Model, type OpenInput, SearchState, TargetsAsyncData, type WindowEditor } from './model'
 
 export type UpdateReturn = Update.Return<Model, Message, ApiClient>
 export type InitReturn = Update.Return<Model, Message>
@@ -40,6 +42,7 @@ export const init = (): InitReturn => ({
     searchState: SearchState.Idle(),
     windowEditor: Option.none(),
     maybeError: Option.none(),
+    currentTimezone: detectTimezone(),
   },
 })
 
@@ -110,14 +113,14 @@ const replaceTarget = (targets: Model['targets'], updated: NotificationTarget): 
   })
 }
 
-const seedWindowEditor = (target: NotificationTarget): WindowEditor => {
+const seedWindowEditor = (target: NotificationTarget, currentTimezone: string): WindowEditor => {
   if (target.window === null) {
     return {
       mattermostUserId: target.mattermostUserId,
       days: WEEKDAY_NAMES,
       startTime: DEFAULT_WINDOW_START_TIME,
       endTime: DEFAULT_WINDOW_END_TIME,
-      timezone: '',
+      timezone: currentTimezone,
     }
   }
 
@@ -130,9 +133,15 @@ const seedWindowEditor = (target: NotificationTarget): WindowEditor => {
   }
 }
 
-const toWindowDefinition = (editor: WindowEditor): Option.Option<NotificationWindowDefinition> =>
+export const resolveEditorTimezone = (editor: WindowEditor, currentTimezone: string): string =>
+  editor.timezone.trim() === '' ? currentTimezone : editor.timezone.trim()
+
+const toWindowDefinition = (
+  editor: WindowEditor,
+  currentTimezone: string,
+): Option.Option<NotificationWindowDefinition> =>
   Schema.decodeUnknownOption(NotificationWindowDefinition)({
-    ...(editor.timezone.trim() === '' ? {} : { timezone: editor.timezone.trim() }),
+    timezone: resolveEditorTimezone(editor, currentTimezone),
     days: editor.days,
     startTime: editor.startTime,
     endTime: editor.endTime,
@@ -275,7 +284,7 @@ export const update = (model: Model, message: Message) =>
 
     ClickedEditNotificationWindow: ({ target }) => ({
       model: modifyFields(model, {
-        windowEditor: () => Option.some(seedWindowEditor(target)),
+        windowEditor: () => Option.some(seedWindowEditor(target, model.currentTimezone)),
         maybeError: () => Option.none(),
       }),
     }),
@@ -332,7 +341,13 @@ export const update = (model: Model, message: Message) =>
       }
 
       const editor = model.windowEditor.value
-      const maybeWindow = toWindowDefinition(editor)
+      const resolvedTimezone = resolveEditorTimezone(editor, model.currentTimezone)
+
+      if (Option.isNone(Schema.decodeUnknownOption(Timezone)(resolvedTimezone))) {
+        return { model: modifyFields(model, { maybeError: () => Option.some(TIMEZONE_INVALID_MESSAGE) }) }
+      }
+
+      const maybeWindow = toWindowDefinition(editor, model.currentTimezone)
 
       if (Option.isNone(maybeWindow)) {
         return { model: modifyFields(model, { maybeError: () => Option.some(WINDOW_INVALID_ERROR) }) }

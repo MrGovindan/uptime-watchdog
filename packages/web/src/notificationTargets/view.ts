@@ -12,6 +12,7 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Message } from './message'
 import type { Model, WindowEditor } from './model'
+import { buildTimezoneOptions } from './timezoneOptions'
 
 const LABEL_CLASS = 'block text-sm font-medium text-gray-700'
 const INPUT_CLASS =
@@ -87,7 +88,7 @@ const timeField = (
     ],
   )
 
-const windowEditorPanel = (editor: WindowEditor, h: HtmlBuilder<Message>): Html =>
+const windowEditorPanel = (editor: WindowEditor, currentTimezone: string, h: HtmlBuilder<Message>): Html =>
   h.div(
     [h.Class(EDITOR_CLASS)],
     [
@@ -122,11 +123,17 @@ const windowEditorPanel = (editor: WindowEditor, h: HtmlBuilder<Message>): Html 
             h.Id('window-timezone'),
             h.Type('text'),
             h.Value(editor.timezone),
-            h.Placeholder('UTC'),
+            h.List('window-timezone-options'),
             h.OnInput((value) => Message.UpdatedNotificationWindowTimezone({ value })),
             h.Class(`${INPUT_CLASS} border-gray-300`),
           ]),
-          h.p([h.Class(HELPER_CLASS)], ['Leave blank to use the server timezone']),
+          h.datalist(
+            [h.Id('window-timezone-options')],
+            buildTimezoneOptions({ currentTimezone, selectedTimezone: editor.timezone }).map((option) =>
+              h.option([h.Value(option.zone)], [option.label]),
+            ),
+          ),
+          h.p([h.Class(HELPER_CLASS)], ['Leave blank to use your current timezone']),
         ],
       ),
       h.div(
@@ -197,7 +204,7 @@ const targetRow = (target: NotificationTarget, model: Model, h: HtmlBuilder<Mess
       ),
       ...Option.match(maybeEditor, {
         onNone: () => [],
-        onSome: (editor) => [windowEditorPanel(editor, h)],
+        onSome: (editor) => [windowEditorPanel(editor, model.currentTimezone, h)],
       }),
     ],
   )

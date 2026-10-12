@@ -10,10 +10,12 @@ export const TIME_OF_DAY_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
 export const TimeOfDay = Schema.String.pipe(Schema.check(Schema.isPattern(TIME_OF_DAY_PATTERN)))
 export type TimeOfDay = typeof TimeOfDay.Type
 
+export const TIMEZONE_INVALID_MESSAGE = 'Enter a valid time zone'
+
 export const Timezone = Schema.String.pipe(
   Schema.check(
     Schema.makeFilter((value) =>
-      Option.isSome(DateTime.zoneFromString(value)) ? undefined : `"${value}" is not a valid IANA time zone`,
+      Option.isSome(DateTime.zoneFromString(value)) ? undefined : TIMEZONE_INVALID_MESSAGE,
     ),
   ),
 )

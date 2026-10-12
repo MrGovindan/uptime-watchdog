@@ -1,4 +1,11 @@
-import { type MattermostUser, MonitorId, MonitorName, NotificationTarget } from '@uptime-watchdog/common'
+import {
+  type MattermostUser,
+  MonitorId,
+  MonitorName,
+  NotificationTarget,
+  TIMEZONE_INVALID_MESSAGE,
+  WEEKDAY_NAMES,
+} from '@uptime-watchdog/common'
 import { Option, Schema } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { expect, test } from 'vitest'
@@ -9,6 +16,7 @@ import {
   SearchMattermostUsers,
   UpdateNotificationTargetWindow,
 } from './notificationTargets/command'
+import { buildTimezoneOptions } from './notificationTargets/timezoneOptions'
 
 const monitorId = Schema.decodeSync(MonitorId)('3f2504e0-4f89-41d3-9a0c-0305e82c3301')
 const monitorName = Schema.decodeSync(MonitorName)('Prod API')
@@ -198,6 +206,18 @@ test('opening the window editor seeds it from the target window', () => {
   }
 })
 
+test('opening the window editor for a target without a window seeds the current timezone', () => {
+  const current = NotificationTargets.update(
+    openedModel,
+    NotificationTargets.Message.ClickedEditNotificationWindow({ target }),
+  ).model
+
+  expect(Option.isSome(current.windowEditor)).toBe(true)
+  if (Option.isSome(current.windowEditor)) {
+    expect(current.windowEditor.value.timezone).toBe(NotificationTargets.init().model.currentTimezone)
+  }
+})
+
 test('toggling a day updates the editor days', () => {
   const withEditor = NotificationTargets.update(
     openedModel,
@@ -254,4 +274,66 @@ test('a completed window update replaces the target', () => {
       }
     }),
   )
+})
+
+test('saving a window with a cleared timezone resolves to the current timezone', () => {
+  const currentTimezone = NotificationTargets.init().model.currentTimezone
+
+  const withEditor = NotificationTargets.update(
+    openedModel,
+    NotificationTargets.Message.ClickedEditNotificationWindow({ target }),
+  ).model
+
+  story(
+    NotificationTargets.update,
+    given(withEditor),
+    message(NotificationTargets.Message.UpdatedNotificationWindowTimezone({ value: '' })),
+    message(NotificationTargets.Message.ClickedSaveNotificationWindow()),
+    Command.expectHas(
+      UpdateNotificationTargetWindow({
+        monitorId,
+        mattermostUserId: target.mattermostUserId,
+        window: {
+          timezone: currentTimezone,
+          days: WEEKDAY_NAMES,
+          startTime: '09:00',
+          endTime: '17:00',
+        },
+      }),
+    ),
+    Command.resolve(
+      UpdateNotificationTargetWindow,
+      NotificationTargets.Message.CompletedUpdateNotificationTargetWindow({ target: windowedTarget }),
+    ),
+  )
+})
+
+test('saving an invalid timezone reports the timezone error and dispatches no command', () => {
+  const withEditor = NotificationTargets.update(
+    openedModel,
+    NotificationTargets.Message.ClickedEditNotificationWindow({ target }),
+  ).model
+
+  story(
+    NotificationTargets.update,
+    given(withEditor),
+    message(NotificationTargets.Message.UpdatedNotificationWindowTimezone({ value: 'Mars/Olympus' })),
+    message(NotificationTargets.Message.ClickedSaveNotificationWindow()),
+    Command.expectNone(),
+    model((current) => {
+      expect(Option.getOrElse(current.maybeError, () => '')).toBe(TIMEZONE_INVALID_MESSAGE)
+    }),
+  )
+})
+
+test('timezone options put the current zone first, inject the selected zone, and sort the rest', () => {
+  const options = buildTimezoneOptions({ currentTimezone: 'America/New_York', selectedTimezone: 'Mars/Olympus' })
+  const zones = options.map((option) => option.zone)
+
+  expect(zones[0]).toBe('America/New_York')
+  expect(zones).toContain('Mars/Olympus')
+  expect(zones).toContain('Europe/London')
+
+  const rest = zones.slice(1).filter((zone) => zone !== 'Mars/Olympus')
+  expect(rest).toEqual([...rest].sort())
 })

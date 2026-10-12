@@ -25,6 +25,15 @@ export const WindowEditor = Schema.Struct({
 })
 export type WindowEditor = typeof WindowEditor.Type
 
+export const detectTimezone = (): string => {
+  try {
+    const { timeZone } = Intl.DateTimeFormat().resolvedOptions()
+    return typeof timeZone === 'string' && timeZone !== '' ? timeZone : 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
+
 export const Model = Schema.Struct({
   dialog: Dialog.Model,
   maybeMonitorId: Schema.Option(MonitorId),
@@ -35,6 +44,7 @@ export const Model = Schema.Struct({
   searchState: SearchState,
   windowEditor: Schema.Option(WindowEditor),
   maybeError: Schema.Option(Schema.String),
+  currentTimezone: Schema.String,
 })
 export type Model = typeof Model.Type
 
